@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.0.4
+
+### Patch Changes
+
+- a366693: fix skills update issue upstream
+
 ## 0.0.2
 
 ### Patch Changes
