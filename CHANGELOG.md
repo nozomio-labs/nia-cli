@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.0.6
+
+### Patch Changes
+
+- 99e0ce4: add local sync commands
+
 ## 0.0.5
 
 ### Patch Changes
