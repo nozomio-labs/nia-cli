@@ -1,5 +1,13 @@
 # nia-cli
 
+## 0.0.5
+
+### Patch Changes
+
+- 8d3f316: set up per OS package distribution
+- 44fdb48: add agent skills annotations
+- da90696: fix index command in non-TTY
+
 ## 0.0.4
 
 ### Patch Changes
