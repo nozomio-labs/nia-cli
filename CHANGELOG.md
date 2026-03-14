@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.0.7
+
+### Patch Changes
+
+- ac1dc9c: update dependencies
+
 ## 0.0.6
 
 ### Patch Changes
