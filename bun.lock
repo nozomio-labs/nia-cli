@@ -11,10 +11,10 @@
         "@biomejs/biome": "^2.4.7",
         "@changesets/cli": "^2.30.0",
         "@crustjs/core": "0.0.15",
-        "@crustjs/crust": "0.0.21",
+        "@crustjs/crust": "0.0.22",
         "@crustjs/plugins": "0.0.19",
         "@crustjs/prompts": "^0.0.9",
-        "@crustjs/skills": "^0.0.19",
+        "@crustjs/skills": "^0.0.20",
         "@crustjs/store": "^0.0.4",
         "@crustjs/style": "^0.0.5",
         "@types/bun": "^1.3.10",
@@ -80,25 +80,25 @@
 
     "@crustjs/core": ["@crustjs/core@0.0.15", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-dgR1hSNj202a3IUfdj2S7QEG6Wd/2v24aq0Iz45NGTQxxNbBs6j2ENQSJTZeYkaeXjj+hnNrIZ1PiLnHuDxYaA=="],
 
-    "@crustjs/crust": ["@crustjs/crust@0.0.21", "", { "optionalDependencies": { "@crustjs/crust-darwin-arm64": "0.0.21", "@crustjs/crust-darwin-x64": "0.0.21", "@crustjs/crust-linux-arm64": "0.0.21", "@crustjs/crust-linux-x64": "0.0.21", "@crustjs/crust-windows-arm64": "0.0.21", "@crustjs/crust-windows-x64": "0.0.21" }, "bin": { "crust": "bin/crust" } }, "sha512-jU16yfexew6mi9au+ruYF/zAipGW0anLEb0ODcADYDNgTmx/V9x0VMsJDnTLUysTe5011kqeGazCO04ltcOIsw=="],
+    "@crustjs/crust": ["@crustjs/crust@0.0.22", "", { "optionalDependencies": { "@crustjs/crust-darwin-arm64": "0.0.22", "@crustjs/crust-darwin-x64": "0.0.22", "@crustjs/crust-linux-arm64": "0.0.22", "@crustjs/crust-linux-x64": "0.0.22", "@crustjs/crust-windows-arm64": "0.0.22", "@crustjs/crust-windows-x64": "0.0.22" }, "bin": { "crust": "bin/crust.js" } }, "sha512-zp89I4q6eyFv9Ou5O1KxaEzkEmLBNPkXESFCw63/EiOpqW2suHY+r9e9iNjTkA9BlJ1chOQ2xSp6x3BlLhr0ZQ=="],
 
-    "@crustjs/crust-darwin-arm64": ["@crustjs/crust-darwin-arm64@0.0.21", "", { "os": "darwin", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-darwin-arm64" } }, "sha512-jqX4TYe8lPMiI8cy89Rp4z/0sjGl2au90JaLRte941JpUsGemzQpD7x4s6OyomZTazLbyG3IdUVsUTgj4XHG7Q=="],
+    "@crustjs/crust-darwin-arm64": ["@crustjs/crust-darwin-arm64@0.0.22", "", { "os": "darwin", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-darwin-arm64" } }, "sha512-CU3NQQPykOiuzoONB9Qi0+5Jy66wj9puKkpC+AAcaP6ZuHCHnjmaWN2Up5mg89afb58gwKbmehg78J6XWHBw3A=="],
 
-    "@crustjs/crust-darwin-x64": ["@crustjs/crust-darwin-x64@0.0.21", "", { "os": "darwin", "cpu": "x64", "bin": { "crust": "bin/crust-bun-darwin-x64" } }, "sha512-Y7QZsNNEQcvfg0lG6L+bv8sn2ati0KbG8r27JDraaiI9C/vZykgJ6WGeywsxNjAHznIZhNmuOYGgBwsPX1C71Q=="],
+    "@crustjs/crust-darwin-x64": ["@crustjs/crust-darwin-x64@0.0.22", "", { "os": "darwin", "cpu": "x64", "bin": { "crust": "bin/crust-bun-darwin-x64" } }, "sha512-VCTIZzqo64YaQ4HgKR7uL5UCGuegSVjYxAVx6oiNA3hL9rwflmPavqLPYi659NmBpYAH3uZT84RkiJc+zquq8w=="],
 
-    "@crustjs/crust-linux-arm64": ["@crustjs/crust-linux-arm64@0.0.21", "", { "os": "linux", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-linux-arm64" } }, "sha512-JU++bQNycITyNKpiUC4Pg6gY9V/DIVc15eNUQaPU69838RsCMvW+3brZFE3LbrA/ZpDwSkrCsTUQxqennuCkAQ=="],
+    "@crustjs/crust-linux-arm64": ["@crustjs/crust-linux-arm64@0.0.22", "", { "os": "linux", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-linux-arm64" } }, "sha512-z4zTbudfoJgbVKy+3kVyGnq7K7vgOxxlb+fBD+BUsSIq5BVd3N4aeQSWtaakqp04j+cbW62ijg/HiBtbMwpjgQ=="],
 
-    "@crustjs/crust-linux-x64": ["@crustjs/crust-linux-x64@0.0.21", "", { "os": "linux", "cpu": "x64", "bin": { "crust": "bin/crust-bun-linux-x64-baseline" } }, "sha512-uBYXB1K4ESD+jBKTlxULNuPHk5P9MzvqhZNsiWdko1ozLqgzWTCAkA8IloVu7QhQqLyiiL5+F5HsTSoUJC/u4A=="],
+    "@crustjs/crust-linux-x64": ["@crustjs/crust-linux-x64@0.0.22", "", { "os": "linux", "cpu": "x64", "bin": { "crust": "bin/crust-bun-linux-x64-baseline" } }, "sha512-WG9GvV66NxV1uGAF6Q9Vcpl/7/HattReu9NnODcOwB1jL3bLki1OjE0QAl1wyy82+4FFahj9KzLm1ZydyraEFQ=="],
 
-    "@crustjs/crust-windows-arm64": ["@crustjs/crust-windows-arm64@0.0.21", "", { "os": "win32", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-windows-arm64.exe" } }, "sha512-+BIUG3IMWSmCAEGIEvTbxB/535qHUwQEJixbf3+h8KOttKoT+ddOHz5Akeh9rwRWDeiRVfahauItNPNMTXhOWQ=="],
+    "@crustjs/crust-windows-arm64": ["@crustjs/crust-windows-arm64@0.0.22", "", { "os": "win32", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-windows-arm64.exe" } }, "sha512-xQ/EFV9quCNTFzF/u3tOHojRDO5w0pKN5Ssl92lR4vCrKaihKcZBBb+0/ez88Bw1rhUzvPV4EDeQQaXRXwGwkQ=="],
 
-    "@crustjs/crust-windows-x64": ["@crustjs/crust-windows-x64@0.0.21", "", { "os": "win32", "cpu": "x64", "bin": { "crust": "bin/crust-bun-windows-x64-baseline.exe" } }, "sha512-LzwYyZkTmmqbF3LzhvJdJrmEhwz6SNfr0EQ9qrR9rQ6aadUHsXvwbxC0c6P6F0GizwXB0D0g8CjeCSDxw3u9Ow=="],
+    "@crustjs/crust-windows-x64": ["@crustjs/crust-windows-x64@0.0.22", "", { "os": "win32", "cpu": "x64", "bin": { "crust": "bin/crust-bun-windows-x64-baseline.exe" } }, "sha512-4gFy0/NspWFvhhdqfwIxeO5g8xLGSulS9q06Hwe4YrxM2/eg/XB9Oioftfm5ERlk78svqC8/ZamLUrkhqhW9AA=="],
 
     "@crustjs/plugins": ["@crustjs/plugins@0.0.19", "", { "dependencies": { "@crustjs/style": "0.0.5" }, "peerDependencies": { "@crustjs/core": "0.0.15", "typescript": "^5" } }, "sha512-z7riDW7q89Oa8YKaLTHvTSgSyLsATMlK1WZ3huhH6w9TvgO+a5AVCOgi7tqi0NDv0D0Bq1wj7Jj/qhnvccyaMQ=="],
 
     "@crustjs/prompts": ["@crustjs/prompts@0.0.9", "", { "dependencies": { "@crustjs/style": "0.0.5" }, "peerDependencies": { "typescript": "^5" } }, "sha512-SXEUHZmfPgUDqkMPMDNF+LqHj1AnjZwQ4R9ne+sPv9BOoYR33UKw9nsuGGZrFGnZWz4eKUSrFiZre24OyctHwQ=="],
 
-    "@crustjs/skills": ["@crustjs/skills@0.0.19", "", { "dependencies": { "@crustjs/prompts": "0.0.9", "@crustjs/style": "0.0.5" }, "peerDependencies": { "@crustjs/core": "0.0.15", "typescript": "^5" } }, "sha512-2gxNsgDIPG87Es+JZFJ95dFw6YKNZcnbaILe+EklYo93z5grkHzPzPZN1QlLwNic3kJ1yhGcdWh92GWP/GwcJg=="],
+    "@crustjs/skills": ["@crustjs/skills@0.0.20", "", { "dependencies": { "@crustjs/prompts": "0.0.9", "@crustjs/style": "0.0.5" }, "peerDependencies": { "@crustjs/core": "0.0.15", "typescript": "^5" } }, "sha512-tpbCIfJmmbn7OvNGYKaxzfY5bYiQe+RGVD427xTazX/PHEZFLHv7EVziNJff2Q8F0VAIUW55EkpEA+0KqJO+Kg=="],
 
     "@crustjs/store": ["@crustjs/store@0.0.4", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-pfYuykVBH08HKBpycPcBZrk4CSQMVhccENDANbJoGXX86YjZk5urjzaJGeGXR1S4DVCt6hGC15aiRf6SEbpyag=="],
 
