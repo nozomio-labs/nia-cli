@@ -1,5 +1,14 @@
 # nia-cli
 
+## 0.0.8
+
+### Patch Changes
+
+- 293c710: replace the shared formatter utility with the new output renderer module
+- 2766445: clarify the indexed-first search workflow and move query search mode guidance to the command annotation
+- 69a8e21: update dependencies
+- 38beb0f: update licence
+
 ## 0.0.7
 
 ### Patch Changes
