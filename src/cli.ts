@@ -77,37 +77,40 @@ const main = app
 			version: pkg.version,
 			defaultScope: "global",
 			instructions: `
-**NEVER use web fetch or web search without checking Nia indexed sources first.**
+### Nia Workflow
 
-1. **Check what's indexed**: \`nia sources list\` and \`nia repos list\` to see all indexed sources.
-2. **Source exists? Search it**: \`nia search query\`, \`nia repos grep\`, \`nia sources grep\`, \`nia repos read\`, \`nia sources read\`.
-3. **Source not indexed but URL known?** Index it first with \`nia repos index\` or \`nia sources index\`, then search.
-4. **Source completely unknown?** Only then use \`nia search web\` or \`nia search deep\`.
+**Use indexed Nia sources first. Web is the fallback, not the default.**
 
-Indexed sources are always more accurate and complete than web fetches. Web fetch returns truncated/summarized content. Nia provides full source code and documentation. **No skipping to web.**
+#### Rules
 
-#### General Notes
+1. **Never use web fetch or run** \`nia search web\` **or** \`nia search deep\` **before checking whether the source already exists in Nia.**
+2. If the user names a repo, doc site, paper, or dataset, treat it as a **known source** and stay inside Nia first.
+3. Do not skip to web because it seems faster. Indexed Nia content is usually more complete and reliable.
 
-- For docs, always index the root link (e.g., \`https://docs.stripe.com\`) to scrape all pages.
-- Indexing takes 1-5 minutes. Wait, then run \`nia sources list\` or \`nia repos list\` again to check status.
-- Most endpoints accept **flexible identifiers**: UUID, display name, or URL.
+#### Required Workflow
 
-#### Source Types
+1. **Check what exists already**
+   - Use \`nia repos list\`, \`nia sources list\`, or \`nia sources resolve <identifier>\`.
+2. **If the source is already indexed, search inside Nia**
+   - Use \`nia search query\` or \`nia search universal\` for answers.
+   - Use \`nia repos tree\`, \`nia repos grep\`, \`nia repos read\`, \`nia sources tree\`, \`nia sources ls\`, \`nia sources grep\`, and \`nia sources read\` for direct inspection.
+3. **If the source is not indexed but the identifier is known, index it first**
+   - Repo: \`nia repos index <owner/repo>\`
+   - Docs: \`nia sources index <root-doc-url>\`
+   - Paper: \`nia papers index <arxiv-id-or-url>\`
+   - Dataset: \`nia datasets index <dataset-id-or-url>\`
+4. **Wait for indexing, then continue in Nia**
+   - Indexing usually takes 1-5 minutes.
+   - Check progress with \`nia repos status\` or \`nia sources list\`.
+5. **Use web search only as a last resort**
+   - Only use \`nia search web\` or \`nia search deep\` when the source is truly unknown, cannot be indexed from the given information, or indexed search is clearly insufficient.
 
-| Type | Index Command | Identifier Examples |
-|------|---------------|---------------------|
-| Repository | \`nia repos index\` | \`owner/repo\`, \`microsoft/vscode\` |
-| Documentation | \`nia sources index\` | \`https://docs.example.com\` |
-| Research Paper | \`nia papers index\` | \`2312.00752\`, arXiv URL |
-| HuggingFace Dataset | \`nia datasets index\` | \`squad\`, \`owner/dataset\` |
+#### Defaults
 
-#### Search Modes
-
-For \`nia search query\`:
-- \`repositories\` -- Search GitHub repositories only (auto-detected when only \`--repos\` is passed).
-- \`sources\` -- Search data sources only (auto-detected when only \`--docs\` is passed).
-- \`unified\` -- Search both (default when both are passed).
-`,
+- Use \`nia search query\` for targeted questions about specific repos, docs, papers, datasets, or local folders.
+- For docs, index the **root URL**, not a single page. Example: \`https://docs.stripe.com\`.
+- Most commands accept flexible identifiers such as UUID, display name, or URL.
+			`,
 		}),
 	);
 

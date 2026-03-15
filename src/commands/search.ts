@@ -193,8 +193,8 @@ const queryCommand = annotate(
 		}),
 	[
 		"Targeted search with AI response and sources. Pass repos, docs, and local folders as comma-separated strings.",
-		"Search mode is auto-detected: `repositories` when only `--repos`, `sources` when only `--docs` or `--local-folders`, `unified` when mixed.",
-		"Use `--fast` for 100-500ms responses without LLM processing.",
+		"Use `repositories` mode for repo-only search, `sources` mode for docs/local-folders-only search, and `unified` when multiple source types are involved.",
+		"Search mode is auto-detected: `repositories` when only `--repos`, `sources` when only `--docs` or `--local-folders`, `unified` when mixed. Override with `--search-mode` only when needed.",
 		"Use `--skip-llm` to return raw search results without AI synthesis.",
 	],
 );
