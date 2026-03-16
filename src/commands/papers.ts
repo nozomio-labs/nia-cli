@@ -1,6 +1,6 @@
 import { annotate } from "@crustjs/skills";
 import type { routes__v2__data_sources__ResearchPaperRequest } from "nia-ai-ts";
-import { V2ApiDataSourcesService } from "nia-ai-ts";
+import { V2ApiDataSourcesService, V2ApiSourcesService } from "nia-ai-ts";
 import { app } from "../app.ts";
 import { createSdk } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
@@ -94,23 +94,37 @@ const listCommand = app
 		await withErrorHandling({ domain: "Paper" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
 
-			const result =
-				await V2ApiDataSourcesService.listResearchPapersV2V2ResearchPapersGet(
-					flags.status ?? undefined,
-					flags.limit ?? undefined,
-					flags.offset ?? undefined,
-				);
+			const result = await V2ApiSourcesService.listSourcesV2SourcesGet(
+				"research_paper",
+				undefined,
+				flags.status ?? undefined,
+				undefined,
+				flags.limit ?? 50,
+				flags.offset ?? undefined,
+			);
 
 			const data = result as Record<string, unknown>;
 			const papers = (data.papers ?? data.items ?? []) as Array<
 				Record<string, unknown>
 			>;
+			const pagination =
+				data.pagination && typeof data.pagination === "object"
+					? (data.pagination as Record<string, unknown>)
+					: undefined;
+			const total = data.total ?? pagination?.total;
 
 			if (papers.length === 0) {
 				console.log("No research papers found.");
 			} else {
 				const rows = papers.map((p) => ({
-					title: p.title ?? p.name ?? "Untitled",
+					title:
+						p.title ??
+						p.display_name ??
+						((p.metadata as Record<string, unknown> | undefined)?.title as
+							| string
+							| undefined) ??
+						p.name ??
+						"Untitled",
 					id: p.source_id ?? p.id ?? "",
 					status: p.status ?? "",
 					created: p.created_at ?? "",
@@ -119,8 +133,8 @@ const listCommand = app
 					fmt.formatTable(rows, ["title", "id", "status", "created"]),
 				);
 
-				if (data.total !== undefined) {
-					console.log(`\nTotal: ${data.total} papers`);
+				if (total !== undefined) {
+					console.log(`\nTotal: ${total} papers`);
 				}
 			}
 		});

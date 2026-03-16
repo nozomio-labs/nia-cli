@@ -27,21 +27,34 @@ const mockIndexResearchPaper = mock(() =>
 
 const mockListResearchPapers = mock(() =>
 	Promise.resolve({
-		papers: [
+		items: [
 			{
-				source_id: "paper-src-001",
-				title: "Attention Is All You Need",
+				id: "paper-src-001",
+				type: "research_paper",
+				display_name: "Attention Is All You Need",
+				metadata: {
+					title: "Attention Is All You Need",
+				},
 				status: "completed",
 				created_at: "2024-01-01T00:00:00Z",
 			},
 			{
-				source_id: "paper-src-002",
-				title: "BERT: Pre-training of Deep Bidirectional Transformers",
+				id: "paper-src-002",
+				type: "research_paper",
+				display_name: "BERT: Pre-training of Deep Bidirectional Transformers",
+				metadata: {
+					title: "BERT: Pre-training of Deep Bidirectional Transformers",
+				},
 				status: "processing",
 				created_at: "2024-01-02T00:00:00Z",
 			},
 		],
-		total: 2,
+		pagination: {
+			total: 2,
+			limit: 50,
+			offset: 0,
+			has_more: false,
+		},
 	}),
 );
 
@@ -150,13 +163,15 @@ mock.module("nia-ai-ts", () => ({
 	},
 	V2ApiDataSourcesService: {
 		indexResearchPaperV2V2ResearchPapersPost: mockIndexResearchPaper,
-		listResearchPapersV2V2ResearchPapersGet: mockListResearchPapers,
 		indexHuggingfaceDatasetV2V2HuggingfaceDatasetsPost:
 			mockIndexHuggingfaceDataset,
 		listHuggingfaceDatasetsV2V2HuggingfaceDatasetsGet:
 			mockListHuggingfaceDatasets,
 		assignDataSourceCategoryV2DataSourcesSourceIdCategoryPatch:
 			mockAssignDataSourceCategory,
+	},
+	V2ApiSourcesService: {
+		listSourcesV2SourcesGet: mockListResearchPapers,
 	},
 	V2ApiCategoriesService: {
 		listCategoriesV2CategoriesGet: mockListCategories,
@@ -168,7 +183,11 @@ mock.module("nia-ai-ts", () => ({
 
 // --- Import after mocking ---
 
-import { V2ApiCategoriesService, V2ApiDataSourcesService } from "nia-ai-ts";
+import {
+	V2ApiCategoriesService,
+	V2ApiDataSourcesService,
+	V2ApiSourcesService,
+} from "nia-ai-ts";
 import { createSdk } from "../../src/services/sdk.ts";
 
 describe("papers, datasets, and categories commands", () => {
@@ -282,10 +301,10 @@ describe("papers, datasets, and categories commands", () => {
 	});
 
 	describe("papers list", () => {
-		test("calls listResearchPapersV2V2ResearchPapersGet with no filters", async () => {
+		test("calls listSourcesV2SourcesGet with research_paper type", async () => {
 			await createSdk();
 
-			await V2ApiDataSourcesService.listResearchPapersV2V2ResearchPapersGet();
+			await V2ApiSourcesService.listSourcesV2SourcesGet("research_paper");
 
 			expect(mockListResearchPapers).toHaveBeenCalledTimes(1);
 		});
@@ -293,34 +312,52 @@ describe("papers, datasets, and categories commands", () => {
 		test("passes status filter", async () => {
 			await createSdk();
 
-			await V2ApiDataSourcesService.listResearchPapersV2V2ResearchPapersGet(
+			await V2ApiSourcesService.listSourcesV2SourcesGet(
+				"research_paper",
+				undefined,
 				"completed",
 			);
 
-			expect(mockListResearchPapers).toHaveBeenCalledWith("completed");
+			expect(mockListResearchPapers).toHaveBeenCalledWith(
+				"research_paper",
+				undefined,
+				"completed",
+			);
 		});
 
 		test("passes limit and offset", async () => {
 			await createSdk();
 
-			await V2ApiDataSourcesService.listResearchPapersV2V2ResearchPapersGet(
+			await V2ApiSourcesService.listSourcesV2SourcesGet(
+				"research_paper",
+				undefined,
+				undefined,
 				undefined,
 				10,
 				5,
 			);
 
-			expect(mockListResearchPapers).toHaveBeenCalledWith(undefined, 10, 5);
+			expect(mockListResearchPapers).toHaveBeenCalledWith(
+				"research_paper",
+				undefined,
+				undefined,
+				undefined,
+				10,
+				5,
+			);
 		});
 
 		test("returns papers list", async () => {
 			await createSdk();
 
 			const result =
-				await V2ApiDataSourcesService.listResearchPapersV2V2ResearchPapersGet();
+				await V2ApiSourcesService.listSourcesV2SourcesGet("research_paper");
 
-			expect(result.papers ?? []).toHaveLength(2);
-			expect(result.total).toBe(2);
-			expect((result.papers ?? [])[0]?.title).toBe("Attention Is All You Need");
+			expect(result.items ?? []).toHaveLength(2);
+			expect(result.pagination.total).toBe(2);
+			expect((result.items ?? [])[0]?.display_name).toBe(
+				"Attention Is All You Need",
+			);
 		});
 
 		test("handles authentication error", async () => {
@@ -331,7 +368,7 @@ describe("papers, datasets, and categories commands", () => {
 			await createSdk();
 
 			try {
-				await V2ApiDataSourcesService.listResearchPapersV2V2ResearchPapersGet();
+				await V2ApiSourcesService.listSourcesV2SourcesGet("research_paper");
 				expect(false).toBe(true);
 			} catch (error) {
 				expect((error as { status: number }).status).toBe(401);
@@ -870,16 +907,26 @@ describe("papers, datasets, and categories commands", () => {
 			});
 		});
 
-		test("papers list maps status/limit/offset as positional params", async () => {
+		test("papers list maps to sources list with research_paper type", async () => {
 			await createSdk();
 
-			await V2ApiDataSourcesService.listResearchPapersV2V2ResearchPapersGet(
+			await V2ApiSourcesService.listSourcesV2SourcesGet(
+				"research_paper",
+				undefined,
 				"completed",
+				undefined,
 				20,
 				10,
 			);
 
-			expect(mockListResearchPapers).toHaveBeenCalledWith("completed", 20, 10);
+			expect(mockListResearchPapers).toHaveBeenCalledWith(
+				"research_paper",
+				undefined,
+				"completed",
+				undefined,
+				20,
+				10,
+			);
 		});
 
 		test("datasets index maps dataset arg to url and config to config field", async () => {
