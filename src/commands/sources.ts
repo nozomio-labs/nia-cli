@@ -451,10 +451,18 @@ const syncCommand = app
 			}
 
 			// Re-index by creating with the same URL
-			const result = await sdk.sources.create({
+			const createRequest = {
+				type: source.type ?? sourceType,
 				url,
 				display_name: source.display_name,
-			});
+			};
+			const result = await sdk.sources.create(createRequest);
+			if (result?.id && source.id && result.id !== source.id) {
+				await V2ApiSourcesService.deleteSourceV2SourcesSourceIdDelete(
+					source.id,
+					source.type ?? sourceType,
+				);
+			}
 
 			fmt.output(result);
 		});

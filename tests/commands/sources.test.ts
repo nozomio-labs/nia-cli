@@ -509,6 +509,43 @@ describe("sources commands", () => {
 			expect(result.status).toBe("indexing");
 		});
 
+		test("sync command execution forwards type into the recreate request", async () => {
+			const originalLog = console.log;
+			const originalError = console.error;
+			console.log = (() => {}) as typeof console.log;
+			console.error = (() => {}) as typeof console.error;
+			mockSourcesCreate.mockImplementationOnce(() =>
+				Promise.resolve({
+					id: "src-456",
+					type: "documentation",
+					identifier: "https://docs.example.com",
+					display_name: "Example Docs",
+					status: "completed",
+					created_at: "2025-01-03T00:00:00Z",
+				}),
+			);
+
+			try {
+				await sourcesCommand.execute({
+					argv: ["sync", "src-123", "--type", "documentation"],
+				});
+
+				expect(mockGetSource).toHaveBeenCalledWith("src-123", "documentation");
+				expect(mockSourcesCreate).toHaveBeenCalledWith({
+					type: "documentation",
+					url: "https://docs.example.com",
+					display_name: "Example Docs",
+				});
+				expect(mockDeleteSource).toHaveBeenCalledWith(
+					"src-123",
+					"documentation",
+				);
+			} finally {
+				console.log = originalLog;
+				console.error = originalError;
+			}
+		});
+
 		test("handles source without identifier", async () => {
 			mockGetSource.mockImplementationOnce(() =>
 				Promise.resolve({
