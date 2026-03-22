@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.0.10
+
+### Patch Changes
+
+- 7560ed9: Fix `nia sources sync` so it preserves the source type when recreating a source and removes the original source if the API returns a new ID.
+
 ## 0.0.9
 
 ### Patch Changes
