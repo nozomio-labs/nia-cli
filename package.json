@@ -41,7 +41,7 @@
 		"publish": "crust build --package && crust publish && changeset tag"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.7",
+		"@biomejs/biome": "^2.4.9",
 		"@changesets/cli": "^2.30.0",
 		"@crustjs/core": "0.0.15",
 		"@crustjs/crust": "0.0.22",
@@ -50,7 +50,7 @@
 		"@crustjs/skills": "^0.0.20",
 		"@crustjs/store": "^0.0.4",
 		"@crustjs/style": "^0.0.5",
-		"@types/bun": "^1.3.10",
+		"@types/bun": "^1.3.11",
 		"nia-ai-ts": "^0.1.0",
 		"typescript": "^5.9.3"
 	},
