@@ -36,9 +36,9 @@ describe("local extractor", () => {
 
 		const result = extractFolderIncremental(tempDir);
 
-			expect(
-				result.files.map((file) => file.path.replace(/\\/g, "/")),
-			).toEqual(["src/main.ts"]);
+		expect(result.files.map((file) => file.path.replace(/\\/g, "/"))).toEqual([
+			"src/main.ts",
+		]);
 		expect(result.stats.extracted).toBe(1);
 	});
 
