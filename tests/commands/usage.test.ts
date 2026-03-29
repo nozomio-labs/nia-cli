@@ -11,14 +11,14 @@ import {
 const mockGetUsage = mock(() =>
 	Promise.resolve({
 		user_id: "user_123",
-		subscription_tier: "Pro",
-		billing_period_start: "2026-01-01",
-		billing_period_end: "2026-02-01",
-		usage: {
-			queries: { used: 42, limit: 100, unlimited: false },
-			indexing: { used: 3, limit: 10, unlimited: false },
-			oracle: { used: 5, limit: 20, unlimited: false },
-			tracer: { used: 10, limit: 0, unlimited: true },
+		tier: "Pro",
+		period: { start: "2026-01-01", end: "2026-02-01" },
+		apiKeyId: "key_123",
+		buckets: {
+			queries: { used: 42, limit: 100, remaining: 58 },
+			indexing: { used: 3, limit: 10, remaining: 7 },
+			oracle: { used: 5, limit: 20, remaining: 15 },
+			tracer: { used: 10, limit: "unlimited", remaining: "unlimited" },
 		},
 	}),
 );
@@ -45,6 +45,7 @@ mock.module("nia-ai-ts", () => ({
 // --- Import after mocking ---
 
 import { V2ApiService } from "nia-ai-ts";
+import { normalizeUsageSummary } from "../../src/services/compat/usage.ts";
 import { createSdk } from "../../src/services/sdk.ts";
 
 describe("usage command", () => {
@@ -58,6 +59,7 @@ describe("usage command", () => {
 		await writeConfig({
 			apiKey: "nia_test_usage_key",
 			baseUrl: "https://apigcp.trynia.ai/v2",
+			useExperimentalApi: false,
 			output: undefined,
 		});
 
@@ -85,36 +87,36 @@ describe("usage command", () => {
 			expect(result).toBeDefined();
 		});
 
-		test("usage response contains subscription tier", async () => {
+		test("normalizes new usage response plan and period", async () => {
 			await createSdk();
 
 			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
+			const usage = normalizeUsageSummary(result);
 
-			expect(result.subscription_tier).toBe("Pro");
+			expect(usage.plan).toBe("Pro");
+			expect(usage.period).toBe("2026-01-01 — 2026-02-01");
 		});
 
-		test("usage response contains billing period", async () => {
+		test("normalizes structured bucket usage entries", async () => {
 			await createSdk();
 
 			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
+			const usage = normalizeUsageSummary(result);
 
-			expect(result.billing_period_start).toBe("2026-01-01");
-			expect(result.billing_period_end).toBe("2026-02-01");
-		});
-
-		test("usage response contains usage breakdown", async () => {
-			await createSdk();
-
-			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
-
-			const usage = result.usage as Record<
-				string,
-				{ used?: number; limit?: number; unlimited?: boolean }
-			>;
-
-			expect(usage.queries).toEqual({ used: 42, limit: 100, unlimited: false });
-			expect(usage.indexing).toEqual({ used: 3, limit: 10, unlimited: false });
-			expect(usage.oracle).toEqual({ used: 5, limit: 20, unlimited: false });
+			expect(usage.usage.queries).toEqual({
+				used: 42,
+				limit: 100,
+				unlimited: false,
+				remaining: 58,
+				isLifetime: undefined,
+			});
+			expect(usage.usage.tracer).toEqual({
+				used: 10,
+				limit: undefined,
+				unlimited: true,
+				remaining: "unlimited",
+				isLifetime: undefined,
+			});
 		});
 
 		test("usage percentage calculation is correct", () => {
@@ -154,39 +156,44 @@ describe("usage command", () => {
 			(mockGetUsage as any).mockImplementationOnce(() =>
 				Promise.resolve({
 					user_id: "user_123",
-					subscription_tier: "Free",
-					billing_period_start: "2026-01-01",
-					billing_period_end: "2026-02-01",
-					usage: {},
+					tier: "Free",
+					period: { start: "2026-01-01", end: "2026-02-01" },
+					buckets: {},
 				}),
 			);
 
 			await createSdk();
 			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
-
-			const usage = (result as Record<string, unknown>).usage as Record<
-				string,
-				unknown
-			>;
+			const usage = normalizeUsageSummary(result).usage;
 			expect(Object.keys(usage).length).toBe(0);
 		});
 
-		test("handles missing usage field", async () => {
+		test("handles old usage contract too", async () => {
 			// biome-ignore lint/suspicious/noExplicitAny: test mock with partial response
 			(mockGetUsage as any).mockImplementationOnce(() =>
 				Promise.resolve({
 					user_id: "user_123",
 					subscription_tier: "Free",
+					billing_period_start: "2026-01-01",
+					billing_period_end: "2026-02-01",
+					usage: {
+						queries: { used: 2, limit: 10, unlimited: false },
+					},
 				}),
 			);
 
 			await createSdk();
 			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
-
-			const usage = (result as Record<string, unknown>).usage as
-				| Record<string, unknown>
-				| undefined;
-			expect(usage).toBeUndefined();
+			const usage = normalizeUsageSummary(result);
+			expect(usage.plan).toBe("Free");
+			expect(usage.period).toBe("2026-01-01 — 2026-02-01");
+			expect(usage.usage.queries).toEqual({
+				used: 2,
+				limit: 10,
+				unlimited: false,
+				remaining: undefined,
+				isLifetime: undefined,
+			});
 		});
 	});
 

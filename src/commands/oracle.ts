@@ -3,6 +3,10 @@ import { annotate } from "@crustjs/skills";
 import type { OracleSessionChatRequest } from "nia-ai-ts";
 import { DefaultService, OpenAPI } from "nia-ai-ts";
 import { app } from "../app.ts";
+import {
+	normalizeUsageSummary,
+	printCliUsage,
+} from "../services/compat/usage.ts";
 import { resolveBaseUrl } from "../services/config.ts";
 import { createSdk } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
@@ -542,33 +546,7 @@ const oracleUsageCommand = app
 			// Use the general usage endpoint — it includes Oracle operation counts
 			const { V2ApiService } = await import("nia-ai-ts");
 			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
-
-			const usage = result as Record<string, unknown>;
-			if (usage.subscription_tier) {
-				console.log(`Plan: ${usage.subscription_tier}`);
-			}
-			if (usage.billing_period_start && usage.billing_period_end) {
-				console.log(
-					`Period: ${usage.billing_period_start} — ${usage.billing_period_end}`,
-				);
-			}
-
-			const ops = usage.usage as
-				| Record<string, { used?: number; limit?: number; unlimited?: boolean }>
-				| undefined;
-			if (ops) {
-				console.log("\nUsage breakdown:");
-				for (const [key, entry] of Object.entries(ops)) {
-					if (entry.unlimited) {
-						console.log(`  ${key}: ${entry.used ?? 0} (unlimited)`);
-					} else {
-						const used = entry.used ?? 0;
-						const limit = entry.limit ?? 0;
-						const pct = limit > 0 ? Math.round((used / limit) * 100) : 0;
-						console.log(`  ${key}: ${used}/${limit} (${pct}%)`);
-					}
-				}
-			}
+			printCliUsage(normalizeUsageSummary(result));
 		});
 	});
 

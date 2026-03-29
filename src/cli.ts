@@ -23,6 +23,7 @@ import { searchCommand } from "./commands/search";
 import { sourcesCommand } from "./commands/sources";
 import { tracerCommand } from "./commands/tracer";
 import { usageCommand } from "./commands/usage";
+import { experimentalModePlugin } from "./plugins/experimental.ts";
 import { APP_NAME } from "./services/config.ts";
 
 const updateStore = createStore({
@@ -60,6 +61,7 @@ const main = app
 	.command(datasetsCommand)
 	.command(categoriesCommand)
 	.command(usageCommand)
+	.use(experimentalModePlugin())
 	.use(
 		updateNotifierPlugin({
 			packageName: pkg.name,

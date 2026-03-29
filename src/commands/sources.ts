@@ -3,7 +3,8 @@ import { annotate } from "@crustjs/skills";
 import type { GrepRequest, SourceCreateRequest } from "nia-ai-ts";
 import { V2ApiDataSourcesService, V2ApiSourcesService } from "nia-ai-ts";
 import { app } from "../app.ts";
-import { createSdk } from "../services/sdk.ts";
+import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
+import { createCliSdk, createSdk } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
 
@@ -22,6 +23,13 @@ type SourceType = (typeof SOURCE_TYPES)[number];
 type DocumentationSourceCreateRequest = SourceCreateRequest & {
 	type: "documentation";
 	extract_branding?: boolean;
+};
+
+type ResolvedSourceMatchRow = {
+	id: string;
+	type: string;
+	name: string;
+	identifier: string;
 };
 
 /**
@@ -112,6 +120,29 @@ export function buildDocumentationSourceCreateRequest(input: {
 	return request;
 }
 
+export function buildResolvedSourceMatchRows(
+	items: Array<{
+		id?: string;
+		type?: string;
+		display_name?: string | null;
+		identifier?: string | null;
+	}>,
+): ResolvedSourceMatchRow[] {
+	return items.map((item) => {
+		const id = item.id ?? "";
+
+		return {
+			id,
+			type: item.type ?? "",
+			name:
+				item.display_name && item.display_name !== item.identifier
+					? item.display_name
+					: "",
+			identifier: item.identifier ?? "",
+		};
+	});
+}
+
 // --- Subcommands ---
 
 const indexCommand = annotate(
@@ -163,9 +194,9 @@ const indexCommand = annotate(
 			const url = await resolveIndexUrl(args.url);
 
 			await withErrorHandling({ domain: "Source" }, async () => {
-				const sdk = await createSdk({ apiKey: flags["api-key"] });
+				const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
 
-				const result = await sdk.sources.create(
+				const result = await cliSdk.sources.create(
 					buildDocumentationSourceCreateRequest({
 						url,
 						name: flags.name,
@@ -225,9 +256,9 @@ const listCommand = app
 		const sourceType = validateSourceType(flags.type);
 
 		await withErrorHandling({ domain: "Source" }, async () => {
-			const sdk = await createSdk({ apiKey: flags["api-key"] });
+			const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
 
-			const result = await sdk.sources.list({
+			const result = await cliSdk.sources.list({
 				type: sourceType,
 				query: flags.query,
 				status: flags.status,
@@ -300,15 +331,45 @@ const resolveCommand = annotate(
 			const sourceType = validateSourceType(flags.type);
 
 			await withErrorHandling({ domain: "Source" }, async () => {
-				const sdk = await createSdk({ apiKey: flags["api-key"] });
+				const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
 
-				const result = await sdk.sources.resolve(args.identifier, sourceType);
+				const result = await cliSdk.sources.resolve(
+					args.identifier,
+					sourceType,
+				);
+				const normalized = normalizeResolvedSourcesResponse(result);
 
-				fmt.output(result);
+				if (fmt.format !== "text") {
+					fmt.output(result);
+					return;
+				}
+
+				if (normalized.items.length === 0) {
+					fmt.info(
+						`No source found for "${normalized.query ?? args.identifier}".`,
+					);
+					return;
+				}
+
+				if (normalized.items.length === 1) {
+					fmt.output(normalized.items[0]);
+					return;
+				}
+
+				fmt.info(
+					`Found ${normalized.items.length} matches for "${normalized.query ?? args.identifier}".`,
+				);
+				fmt.output(buildResolvedSourceMatchRows(normalized.items), {
+					columns: ["id", "type", "name", "identifier"],
+				});
+				fmt.info(
+					"Refine the result with `nia search query` or use a source `id` for exact follow-up commands.",
+				);
 			});
 		}),
 	[
 		"Accepts UUID, display name, or URL as the identifier.",
+		"If multiple matches are returned, use `nia search query` to refine the core flow.",
 		"Use `--type` to narrow the lookup when names are ambiguous across source types.",
 	],
 );

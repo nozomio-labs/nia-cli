@@ -3,6 +3,7 @@ import { rmSync } from "node:fs";
 import {
 	getConfigDirPath,
 	maskApiKey,
+	persistExperimentalPreference,
 	readConfig,
 	resetConfig,
 	resolveApiKey,
@@ -32,6 +33,7 @@ describe("config service", () => {
 
 		// Clean env vars set by tests
 		delete process.env.NIA_API_KEY;
+		delete process.env.NIA_BASE_URL;
 	});
 
 	describe("readConfig", () => {
@@ -39,17 +41,20 @@ describe("config service", () => {
 			const config = await readConfig();
 			expect(config.apiKey).toBeUndefined();
 			expect(config.baseUrl).toBe("https://apigcp.trynia.ai/v2");
+			expect(config.useExperimentalApi).toBe(false);
 		});
 
 		test("reads persisted config values", async () => {
 			await writeConfig({
 				apiKey: "nia_test1234",
 				baseUrl: "https://custom.api.com",
+				useExperimentalApi: true,
 			});
 
 			const config = await readConfig();
 			expect(config.apiKey).toBe("nia_test1234");
 			expect(config.baseUrl).toBe("https://custom.api.com");
+			expect(config.useExperimentalApi).toBe(true);
 		});
 	});
 
@@ -58,11 +63,13 @@ describe("config service", () => {
 			await writeConfig({
 				apiKey: "nia_abcd",
 				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: true,
 			});
 
 			const config = await readConfig();
 			expect(config.apiKey).toBe("nia_abcd");
 			expect(config.baseUrl).toBe("https://apigcp.trynia.ai/v2");
+			expect(config.useExperimentalApi).toBe(true);
 		});
 	});
 
@@ -71,6 +78,7 @@ describe("config service", () => {
 			await writeConfig({
 				apiKey: undefined,
 				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
 			});
 
 			await updateConfig((current) => ({
@@ -88,6 +96,7 @@ describe("config service", () => {
 			await writeConfig({
 				apiKey: "nia_secret",
 				baseUrl: "https://custom.com",
+				useExperimentalApi: true,
 			});
 
 			await resetConfig();
@@ -95,6 +104,7 @@ describe("config service", () => {
 			const config = await readConfig();
 			expect(config.apiKey).toBeUndefined();
 			expect(config.baseUrl).toBe("https://apigcp.trynia.ai/v2");
+			expect(config.useExperimentalApi).toBe(false);
 		});
 	});
 
@@ -126,6 +136,7 @@ describe("config service", () => {
 			await writeConfig({
 				apiKey: "config_key",
 				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
 			});
 
 			const key = await resolveApiKey("override_key");
@@ -137,6 +148,7 @@ describe("config service", () => {
 			await writeConfig({
 				apiKey: "config_key",
 				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
 			});
 
 			const key = await resolveApiKey();
@@ -148,6 +160,7 @@ describe("config service", () => {
 			await writeConfig({
 				apiKey: "config_key",
 				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
 			});
 
 			const key = await resolveApiKey();
@@ -166,6 +179,7 @@ describe("config service", () => {
 			await writeConfig({
 				apiKey: "config",
 				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
 			});
 
 			// Override beats env and config
@@ -190,6 +204,7 @@ describe("config service", () => {
 			await writeConfig({
 				apiKey: undefined,
 				baseUrl: "https://configured.com",
+				useExperimentalApi: false,
 			});
 
 			const url = await resolveBaseUrl();
@@ -199,6 +214,51 @@ describe("config service", () => {
 		test("returns default when no override or config", async () => {
 			const url = await resolveBaseUrl();
 			expect(url).toBe("https://apigcp.trynia.ai/v2");
+		});
+
+		test("prefers experimental base URL over env and config", async () => {
+			process.env.NIA_BASE_URL = "https://env.example.com";
+			await writeConfig({
+				apiKey: undefined,
+				baseUrl: "https://configured.com",
+				useExperimentalApi: true,
+			});
+
+			const url = await resolveBaseUrl();
+			expect(url).toBe("https://api.trynia.ai");
+		});
+
+		test("override still beats experimental mode", async () => {
+			await writeConfig({
+				apiKey: undefined,
+				baseUrl: "https://configured.com",
+				useExperimentalApi: true,
+			});
+
+			const url = await resolveBaseUrl("https://override.example.com");
+			expect(url).toBe("https://override.example.com");
+		});
+	});
+
+	describe("persistExperimentalPreference", () => {
+		test("persists experimental mode when enabled", async () => {
+			await persistExperimentalPreference(true);
+
+			const config = await readConfig();
+			expect(config.useExperimentalApi).toBe(true);
+		});
+
+		test("persists disable when set to false", async () => {
+			await writeConfig({
+				apiKey: undefined,
+				baseUrl: "https://configured.com",
+				useExperimentalApi: true,
+			});
+
+			await persistExperimentalPreference(false);
+
+			const config = await readConfig();
+			expect(config.useExperimentalApi).toBe(false);
 		});
 	});
 

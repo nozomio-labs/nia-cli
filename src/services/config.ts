@@ -2,6 +2,7 @@ import { configDir, createStore } from "@crustjs/store";
 
 export const APP_NAME = "nia";
 export const DEFAULT_BASE_URL = "https://apigcp.trynia.ai/v2";
+export const EXPERIMENTAL_BASE_URL = "https://api.trynia.ai";
 
 export const configStore = createStore({
 	dirPath: configDir(APP_NAME),
@@ -15,6 +16,11 @@ export const configStore = createStore({
 			type: "string",
 			default: DEFAULT_BASE_URL,
 			description: "Nia API base URL",
+		},
+		useExperimentalApi: {
+			type: "boolean",
+			default: false,
+			description: "Use the experimental load-balanced API base URL",
 		},
 	},
 });
@@ -73,8 +79,9 @@ export async function resolveApiKey(
 /**
  * Resolve the API base URL from the config resolution chain:
  * 1. Override (from CLI flag)
- * 2. NIA_BASE_URL environment variable
- * 3. Config file (~/.config/nia/config.json)
+ * 2. Persistent experimental mode
+ * 3. NIA_BASE_URL environment variable
+ * 4. Config file (~/.config/nia/config.json)
  *
  * Returns the default URL if no override is found.
  */
@@ -83,11 +90,24 @@ export async function resolveBaseUrl(override?: string): Promise<string> {
 		return override;
 	}
 
+	const config = await configStore.read();
+	if (config.useExperimentalApi) {
+		return EXPERIMENTAL_BASE_URL;
+	}
+
 	const envBaseUrl = process.env.NIA_BASE_URL;
 	if (envBaseUrl) {
 		return envBaseUrl;
 	}
 
-	const config = await configStore.read();
 	return config.baseUrl;
+}
+
+export async function persistExperimentalPreference(
+	enabled: boolean,
+): Promise<void> {
+	await configStore.update((config) => ({
+		...config,
+		useExperimentalApi: enabled,
+	}));
 }

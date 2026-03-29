@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { resolveApiKeySource } from "../../src/commands/auth.ts";
+import { normalizeUsageSummary } from "../../src/services/compat/usage.ts";
 import {
 	getConfigDirPath,
 	readConfig,
@@ -12,13 +13,12 @@ import {
 const mockGetUsage = mock(() =>
 	Promise.resolve({
 		user_id: "user-123",
-		subscription_tier: "Pro",
-		billing_period_start: "2026-01-01",
-		billing_period_end: "2026-02-01",
-		usage: {
-			queries: { used: 42, limit: 100, unlimited: false },
-			indexing: { used: 3, limit: 10, unlimited: false },
-			oracle: { used: 0, limit: 0, unlimited: true },
+		tier: "Pro",
+		period: { start: "2026-01-01", end: "2026-02-01" },
+		buckets: {
+			queries: { used: 42, limit: 100, remaining: 58 },
+			indexing: { used: 3, limit: 10, remaining: 7 },
+			oracle: { used: 0, limit: "unlimited", remaining: "unlimited" },
 		},
 	}),
 );
@@ -92,7 +92,7 @@ describe("auth commands", () => {
 			configureOpenApi(token);
 
 			const usage = await V2ApiService.getUsageSummaryV2V2UsageGet();
-			expect(usage.subscription_tier).toBe("Pro");
+			expect(normalizeUsageSummary(usage).plan).toBe("Pro");
 			expect(mockGetUsage).toHaveBeenCalledTimes(1);
 
 			// Store the API key
@@ -155,6 +155,7 @@ describe("auth commands", () => {
 			await writeConfig({
 				apiKey: "nia_stored_key_1234",
 				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
 				output: undefined,
 			});
 
@@ -177,6 +178,7 @@ describe("auth commands", () => {
 			await writeConfig({
 				apiKey: "nia_stored_key",
 				baseUrl: "https://custom.api.com",
+				useExperimentalApi: false,
 				output: "json",
 			});
 
@@ -225,13 +227,16 @@ describe("auth commands", () => {
 
 			configureOpenApi("nia_test_key");
 			const usage = await V2ApiService.getUsageSummaryV2V2UsageGet();
+			const normalized = normalizeUsageSummary(usage);
 
 			expect(usage.user_id).toBe("user-123");
-			expect(usage.subscription_tier).toBe("Pro");
-			expect(usage.usage?.queries).toEqual({
+			expect(normalized.plan).toBe("Pro");
+			expect(normalized.usage.queries).toEqual({
 				used: 42,
 				limit: 100,
 				unlimited: false,
+				remaining: 58,
+				isLifetime: undefined,
 			});
 		});
 

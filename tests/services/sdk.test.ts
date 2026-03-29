@@ -55,6 +55,7 @@ describe("sdk service", () => {
 			await writeConfig({
 				apiKey: "nia_from_config",
 				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
 				output: undefined,
 			});
 
@@ -75,6 +76,18 @@ describe("sdk service", () => {
 		test("uses default base URL when none specified", async () => {
 			await createSdk({ apiKey: "nia_test_123" });
 			expect(OpenAPI.BASE).toBe("https://apigcp.trynia.ai/v2");
+		});
+
+		test("uses experimental base URL when enabled in config", async () => {
+			await writeConfig({
+				apiKey: "nia_from_config",
+				baseUrl: "https://custom.example.com",
+				useExperimentalApi: true,
+				output: undefined,
+			});
+
+			await createSdk();
+			expect(OpenAPI.BASE).toBe("https://api.trynia.ai");
 		});
 
 		test("override API key takes priority over env", async () => {

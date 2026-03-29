@@ -124,8 +124,10 @@ mock.module("nia-ai-ts", () => ({
 
 import {
 	buildDocumentationSourceCreateRequest,
+	buildResolvedSourceMatchRows,
 	sourcesCommand,
 } from "../../src/commands/sources.ts";
+import { normalizeResolvedSourcesResponse } from "../../src/services/compat/sources.ts";
 import { createSdk } from "../../src/services/sdk.ts";
 
 describe("sources commands", () => {
@@ -139,6 +141,7 @@ describe("sources commands", () => {
 		await writeConfig({
 			apiKey: "nia_test_sources_key",
 			baseUrl: "https://apigcp.trynia.ai/v2",
+			useExperimentalApi: false,
 			output: undefined,
 		});
 
@@ -392,6 +395,82 @@ describe("sources commands", () => {
 			expect(result.id).toBe("src-123");
 			expect(result.type).toBe("documentation");
 			expect(result.display_name).toBe("Example Docs");
+		});
+
+		test("normalizes new multi-match response shape", () => {
+			const result = normalizeResolvedSourcesResponse({
+				query: "Example Docs",
+				items: [
+					{
+						id: "src-123",
+						type: "documentation",
+						display_name: "Example Docs",
+						identifier: "https://docs.example.com",
+					},
+					{
+						id: "src-456",
+						type: "repository",
+						display_name: "Example Repo",
+						identifier: "example/repo",
+					},
+				],
+			});
+
+			expect(result.query).toBe("Example Docs");
+			expect(result.items).toHaveLength(2);
+			expect(result.items[1]?.identifier).toBe("example/repo");
+		});
+
+		test("normalizes old single-source response shape", () => {
+			const result = normalizeResolvedSourcesResponse({
+				id: "src-123",
+				type: "documentation",
+				display_name: "Example Docs",
+				identifier: "https://docs.example.com",
+			});
+
+			expect(result.items).toHaveLength(1);
+			expect(result.items[0]?.id).toBe("src-123");
+		});
+
+		test("builds reusable multi-match rows with explicit id column", () => {
+			const rows = buildResolvedSourceMatchRows([
+				{
+					id: "src-123",
+					type: "documentation",
+					display_name: "AI SDK Docs",
+					identifier: "https://ai-sdk.dev/docs",
+				},
+			]);
+
+			expect(rows).toEqual([
+				{
+					id: "src-123",
+					type: "documentation",
+					name: "AI SDK Docs",
+					identifier: "https://ai-sdk.dev/docs",
+				},
+			]);
+		});
+
+		test("avoids duplicating url when display name matches identifier", () => {
+			const rows = buildResolvedSourceMatchRows([
+				{
+					id: "src-123",
+					type: "documentation",
+					display_name: "https://ai-sdk.dev",
+					identifier: "https://ai-sdk.dev",
+				},
+			]);
+
+			expect(rows).toEqual([
+				{
+					id: "src-123",
+					type: "documentation",
+					name: "",
+					identifier: "https://ai-sdk.dev",
+				},
+			]);
 		});
 	});
 
@@ -722,6 +801,7 @@ describe("sources commands", () => {
 			await writeConfig({
 				apiKey: undefined,
 				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
 				output: undefined,
 			});
 

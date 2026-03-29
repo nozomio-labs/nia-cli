@@ -3,13 +3,30 @@ import {
 	getConfigDirPath,
 	maskApiKey,
 	type NiaConfig,
+	persistExperimentalPreference,
 	resolveApiKey,
 	resolveBaseUrl,
 } from "../../src/services/config.ts";
 
-export { getConfigDirPath, maskApiKey, resolveApiKey, resolveBaseUrl };
+export {
+	getConfigDirPath,
+	maskApiKey,
+	persistExperimentalPreference,
+	resolveApiKey,
+	resolveBaseUrl,
+};
 
-type LegacyConfig = NiaConfig & { output?: string };
+type LegacyConfig = Omit<NiaConfig, "useExperimentalApi"> & {
+	useExperimentalApi?: boolean;
+	output?: string;
+};
+
+function withDefaults(config: LegacyConfig): NiaConfig {
+	return {
+		...config,
+		useExperimentalApi: config.useExperimentalApi ?? false,
+	};
+}
 
 export async function readConfig(): Promise<LegacyConfig> {
 	return (await configStore.read()) as LegacyConfig;
@@ -17,7 +34,7 @@ export async function readConfig(): Promise<LegacyConfig> {
 
 export async function writeConfig(config: LegacyConfig): Promise<void> {
 	const { output: _output, ...next } = config;
-	return configStore.write(next as NiaConfig);
+	return configStore.write(withDefaults(next as LegacyConfig));
 }
 
 export async function updateConfig(
@@ -26,7 +43,7 @@ export async function updateConfig(
 	return configStore.update((current) => {
 		const next = updater(current as LegacyConfig);
 		const { output: _output, ...persisted } = next;
-		return persisted as NiaConfig;
+		return withDefaults(persisted as LegacyConfig);
 	});
 }
 

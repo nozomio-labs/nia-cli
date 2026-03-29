@@ -76,14 +76,13 @@ const mockChatStream = mock(() =>
 const mockGetUsage = mock(() =>
 	Promise.resolve({
 		user_id: "user_123",
-		subscription_tier: "Pro",
-		billing_period_start: "2026-01-01",
-		billing_period_end: "2026-02-01",
-		usage: {
-			queries: { used: 42, limit: 100, unlimited: false },
-			oracle: { used: 5, limit: 20, unlimited: false },
-			indexing: { used: 3, limit: 10, unlimited: false },
-			oracle_1m: { used: 1, limit: 5, unlimited: false },
+		tier: "Pro",
+		period: { start: "2026-01-01", end: "2026-02-01" },
+		buckets: {
+			queries: { used: 42, limit: 100, remaining: 58 },
+			oracle: { used: 5, limit: 20, remaining: 15 },
+			indexing: { used: 3, limit: 10, remaining: 7 },
+			oracle_1m: { used: 1, limit: 5, remaining: 4 },
 		},
 	}),
 );
@@ -121,6 +120,7 @@ mock.module("nia-ai-ts", () => ({
 // --- Import after mocking ---
 
 import { DefaultService } from "nia-ai-ts";
+import { normalizeUsageSummary } from "../../src/services/compat/usage.ts";
 import { createSdk } from "../../src/services/sdk.ts";
 
 describe("oracle session commands", () => {
@@ -134,6 +134,7 @@ describe("oracle session commands", () => {
 		await writeConfig({
 			apiKey: "nia_test_oracle_sessions_key",
 			baseUrl: "https://apigcp.trynia.ai/v2",
+			useExperimentalApi: false,
 			output: undefined,
 		});
 
@@ -501,9 +502,10 @@ describe("oracle session commands", () => {
 
 			const { V2ApiService } = await import("nia-ai-ts");
 			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
+			const usage = normalizeUsageSummary(result);
 
 			expect(mockGetUsage).toHaveBeenCalledTimes(1);
-			expect(result.subscription_tier).toBe("Pro");
+			expect(usage.plan).toBe("Pro");
 		});
 
 		test("usage response contains oracle and oracle_1m entries", async () => {
@@ -511,13 +513,21 @@ describe("oracle session commands", () => {
 
 			const { V2ApiService } = await import("nia-ai-ts");
 			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
-
-			const usage = result.usage as Record<
-				string,
-				{ used?: number; limit?: number; unlimited?: boolean }
-			>;
-			expect(usage.oracle).toEqual({ used: 5, limit: 20, unlimited: false });
-			expect(usage.oracle_1m).toEqual({ used: 1, limit: 5, unlimited: false });
+			const usage = normalizeUsageSummary(result).usage;
+			expect(usage.oracle).toEqual({
+				used: 5,
+				limit: 20,
+				unlimited: false,
+				remaining: 15,
+				isLifetime: undefined,
+			});
+			expect(usage.oracle_1m).toEqual({
+				used: 1,
+				limit: 5,
+				unlimited: false,
+				remaining: 4,
+				isLifetime: undefined,
+			});
 		});
 
 		test("usage response includes billing period", async () => {
@@ -525,9 +535,9 @@ describe("oracle session commands", () => {
 
 			const { V2ApiService } = await import("nia-ai-ts");
 			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
-
-			expect(result.billing_period_start).toBe("2026-01-01");
-			expect(result.billing_period_end).toBe("2026-02-01");
+			expect(normalizeUsageSummary(result).period).toBe(
+				"2026-01-01 — 2026-02-01",
+			);
 		});
 
 		test("usage percentage calculation", () => {
@@ -607,6 +617,7 @@ describe("oracle session commands", () => {
 			await writeConfig({
 				apiKey: undefined,
 				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
 				output: undefined,
 			});
 

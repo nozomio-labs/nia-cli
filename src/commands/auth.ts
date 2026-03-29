@@ -1,13 +1,17 @@
 import { password } from "@crustjs/prompts";
 import { annotate } from "@crustjs/skills";
-import { V2ApiService } from "nia-ai-ts";
 import { app } from "../app.ts";
+import {
+	normalizeUsageSummary,
+	printCliUsage,
+} from "../services/compat/usage.ts";
 import {
 	configStore,
 	getConfigDirPath,
 	maskApiKey,
+	resolveBaseUrl,
 } from "../services/config.ts";
-import { configureOpenApi } from "../services/sdk.ts";
+import { configureOpenApi, createCliSdk } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
 
 const loginCommand = app
@@ -40,10 +44,11 @@ const loginCommand = app
 		}
 
 		// Validate the API key by calling the usage endpoint
-		configureOpenApi(apiKey);
+		configureOpenApi(apiKey, await resolveBaseUrl());
 
 		await withErrorHandling({ domain: "Authentication" }, async () => {
-			const usage = await V2ApiService.getUsageSummaryV2V2UsageGet();
+			const cliSdk = await createCliSdk({ apiKey });
+			const usage = await cliSdk.usage.getSummary();
 
 			// API key is valid — store it in config
 			await configStore.update((config) => ({
@@ -52,21 +57,7 @@ const loginCommand = app
 			}));
 
 			console.log(`Authenticated successfully. API key: ${maskApiKey(apiKey)}`);
-
-			if (usage.subscription_tier) {
-				console.log(`Plan: ${usage.subscription_tier}`);
-			}
-
-			if (usage.usage) {
-				const entries = Object.entries(usage.usage);
-				for (const [name, entry] of entries) {
-					if (entry.unlimited) {
-						console.log(`  ${name}: unlimited`);
-					} else if (entry.limit != null && entry.used != null) {
-						console.log(`  ${name}: ${entry.used}/${entry.limit}`);
-					}
-				}
-			}
+			printCliUsage(normalizeUsageSummary(usage));
 		});
 	});
 
@@ -122,25 +113,12 @@ const statusCommand = app
 		console.log(`API key: ${maskApiKey(activeKey)}`);
 
 		// Try to fetch plan info
-		configureOpenApi(activeKey);
+		configureOpenApi(activeKey, await resolveBaseUrl());
 
 		try {
-			const usage = await V2ApiService.getUsageSummaryV2V2UsageGet();
-
-			if (usage.subscription_tier) {
-				console.log(`Plan: ${usage.subscription_tier}`);
-			}
-
-			if (usage.usage) {
-				const entries = Object.entries(usage.usage);
-				for (const [name, entry] of entries) {
-					if (entry.unlimited) {
-						console.log(`  ${name}: unlimited`);
-					} else if (entry.limit != null && entry.used != null) {
-						console.log(`  ${name}: ${entry.used}/${entry.limit}`);
-					}
-				}
-			}
+			const cliSdk = await createCliSdk({ apiKey: activeKey });
+			const usage = await cliSdk.usage.getSummary();
+			printCliUsage(normalizeUsageSummary(usage));
 		} catch {
 			console.log("Could not fetch plan info (API key may be invalid).");
 		}
