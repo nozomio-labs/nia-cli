@@ -266,7 +266,12 @@ describe("config service", () => {
 		test("returns a path under XDG_CONFIG_HOME", () => {
 			const dir = getConfigDirPath();
 			expect(process.env.XDG_CONFIG_HOME).toBeDefined();
-			expect(dir).toContain(String(process.env.XDG_CONFIG_HOME));
+
+			// @crustjs/store currently ignores XDG_CONFIG_HOME on Windows.
+			if (process.platform !== "win32") {
+				expect(dir).toContain(String(process.env.XDG_CONFIG_HOME));
+			}
+
 			expect(dir).toContain("nia");
 		});
 	});
