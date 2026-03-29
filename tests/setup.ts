@@ -5,8 +5,12 @@
  * Add global mocks, test helpers, and shared fixtures here.
  */
 
+import os from "node:os";
+import path from "node:path";
+
 // Ensure tests don't accidentally use real config paths
-process.env.XDG_CONFIG_HOME = "/tmp/nia-cli-test-config";
+const testConfigHome = path.join(os.tmpdir(), "nia-cli-test-config");
+process.env.XDG_CONFIG_HOME = testConfigHome;
 
 // Suppress console output during tests unless DEBUG is set
 if (!process.env.DEBUG) {
