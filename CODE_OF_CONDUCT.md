@@ -41,14 +41,13 @@ officially representing the project in public spaces.
 
 ## Reporting
 
-If you experience or witness unacceptable behavior, report it to the maintainers by opening an issue:
+If you experience or witness unacceptable behavior, please report it privately to the maintainers at **founders@nozomio.com**.
+
+For non-sensitive issues, you may also open a public issue:
 
 - https://github.com/nozomio-labs/nia-cli/issues/new
 
-If your report is sensitive, ask maintainers for a private channel in the issue without sharing personal
-details publicly.
-
-All complaints will be reviewed and investigated promptly and fairly.
+All private reports will be treated with strict confidentiality and investigated promptly and fairly.
 
 ## Enforcement Guidelines
 
