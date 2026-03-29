@@ -12,15 +12,15 @@
         "@biomejs/biome": "^2.4.9",
         "@changesets/cli": "^2.30.0",
         "@crustjs/core": "0.0.15",
-        "@crustjs/crust": "0.0.22",
-        "@crustjs/plugins": "0.0.19",
-        "@crustjs/prompts": "^0.0.9",
-        "@crustjs/skills": "^0.0.20",
+        "@crustjs/crust": "0.0.23",
+        "@crustjs/plugins": "0.0.20",
+        "@crustjs/prompts": "^0.0.10",
+        "@crustjs/skills": "^0.0.21",
         "@crustjs/store": "^0.0.4",
-        "@crustjs/style": "^0.0.5",
+        "@crustjs/style": "^0.0.6",
         "@types/bun": "^1.3.11",
         "nia-ai-ts": "^0.1.0",
-        "typescript": "^5.9.3",
+        "typescript": "^6.0.2",
       },
     },
   },
@@ -83,29 +83,29 @@
 
     "@crustjs/core": ["@crustjs/core@0.0.15", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-dgR1hSNj202a3IUfdj2S7QEG6Wd/2v24aq0Iz45NGTQxxNbBs6j2ENQSJTZeYkaeXjj+hnNrIZ1PiLnHuDxYaA=="],
 
-    "@crustjs/crust": ["@crustjs/crust@0.0.22", "", { "optionalDependencies": { "@crustjs/crust-darwin-arm64": "0.0.22", "@crustjs/crust-darwin-x64": "0.0.22", "@crustjs/crust-linux-arm64": "0.0.22", "@crustjs/crust-linux-x64": "0.0.22", "@crustjs/crust-windows-arm64": "0.0.22", "@crustjs/crust-windows-x64": "0.0.22" }, "bin": { "crust": "bin/crust.js" } }, "sha512-zp89I4q6eyFv9Ou5O1KxaEzkEmLBNPkXESFCw63/EiOpqW2suHY+r9e9iNjTkA9BlJ1chOQ2xSp6x3BlLhr0ZQ=="],
+    "@crustjs/crust": ["@crustjs/crust@0.0.23", "", { "optionalDependencies": { "@crustjs/crust-darwin-arm64": "0.0.23", "@crustjs/crust-darwin-x64": "0.0.23", "@crustjs/crust-linux-arm64": "0.0.23", "@crustjs/crust-linux-x64": "0.0.23", "@crustjs/crust-windows-arm64": "0.0.23", "@crustjs/crust-windows-x64": "0.0.23" }, "bin": { "crust": "bin/crust.js" } }, "sha512-mghonO4AhMQiNTendaj7qpkguCnp/77tnf1EbMwqSwvTZpAkApcjEwu5+USyky1TLOX9L+UBWA2p7Skz3NIRew=="],
 
-    "@crustjs/crust-darwin-arm64": ["@crustjs/crust-darwin-arm64@0.0.22", "", { "os": "darwin", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-darwin-arm64" } }, "sha512-CU3NQQPykOiuzoONB9Qi0+5Jy66wj9puKkpC+AAcaP6ZuHCHnjmaWN2Up5mg89afb58gwKbmehg78J6XWHBw3A=="],
+    "@crustjs/crust-darwin-arm64": ["@crustjs/crust-darwin-arm64@0.0.23", "", { "os": "darwin", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-darwin-arm64" } }, "sha512-vsrbtYf6TAURsJ4AzuS9g/CMBwoQ0yDgysuF+Z+8SPSUYfmV4W6MGUVO2rlL+/mhxgiK7Xoo7VxwlR/vDhfy4g=="],
 
-    "@crustjs/crust-darwin-x64": ["@crustjs/crust-darwin-x64@0.0.22", "", { "os": "darwin", "cpu": "x64", "bin": { "crust": "bin/crust-bun-darwin-x64" } }, "sha512-VCTIZzqo64YaQ4HgKR7uL5UCGuegSVjYxAVx6oiNA3hL9rwflmPavqLPYi659NmBpYAH3uZT84RkiJc+zquq8w=="],
+    "@crustjs/crust-darwin-x64": ["@crustjs/crust-darwin-x64@0.0.23", "", { "os": "darwin", "cpu": "x64", "bin": { "crust": "bin/crust-bun-darwin-x64" } }, "sha512-MtDSg5NnpczB1l24H6wAeAhdjVbtHuWGLw2MNO2nm5XwylISoFRTAB4TlNd62nLuxrdXxPtLf5WpRJEU0ZY9SQ=="],
 
-    "@crustjs/crust-linux-arm64": ["@crustjs/crust-linux-arm64@0.0.22", "", { "os": "linux", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-linux-arm64" } }, "sha512-z4zTbudfoJgbVKy+3kVyGnq7K7vgOxxlb+fBD+BUsSIq5BVd3N4aeQSWtaakqp04j+cbW62ijg/HiBtbMwpjgQ=="],
+    "@crustjs/crust-linux-arm64": ["@crustjs/crust-linux-arm64@0.0.23", "", { "os": "linux", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-linux-arm64" } }, "sha512-KOgeI+NUNS1xmua+AECsPZN+r2I+6EROnXYTV2iye1bFP0l4rumZMTH4RdX//75smwXqDX301IIPQgfUTLLcog=="],
 
-    "@crustjs/crust-linux-x64": ["@crustjs/crust-linux-x64@0.0.22", "", { "os": "linux", "cpu": "x64", "bin": { "crust": "bin/crust-bun-linux-x64-baseline" } }, "sha512-WG9GvV66NxV1uGAF6Q9Vcpl/7/HattReu9NnODcOwB1jL3bLki1OjE0QAl1wyy82+4FFahj9KzLm1ZydyraEFQ=="],
+    "@crustjs/crust-linux-x64": ["@crustjs/crust-linux-x64@0.0.23", "", { "os": "linux", "cpu": "x64", "bin": { "crust": "bin/crust-bun-linux-x64-baseline" } }, "sha512-E1SMop3+kFkPJXHB8g0IqBfz7IvZEyVLYbNhr0SB4mi/8xQPBmR4vfEfPA96kpXQsjgntHN/+sH4G33pc/D6YQ=="],
 
-    "@crustjs/crust-windows-arm64": ["@crustjs/crust-windows-arm64@0.0.22", "", { "os": "win32", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-windows-arm64.exe" } }, "sha512-xQ/EFV9quCNTFzF/u3tOHojRDO5w0pKN5Ssl92lR4vCrKaihKcZBBb+0/ez88Bw1rhUzvPV4EDeQQaXRXwGwkQ=="],
+    "@crustjs/crust-windows-arm64": ["@crustjs/crust-windows-arm64@0.0.23", "", { "os": "win32", "cpu": "arm64", "bin": { "crust": "bin/crust-bun-windows-arm64.exe" } }, "sha512-KERE/UGL7Yn/0DXxO3ickAxkA1zDTmLF8bKQQ1s6f2vbfDjqsZL7bOfkl+B9K5+BSgmnU9j3LdIhpSmxov2cKA=="],
 
-    "@crustjs/crust-windows-x64": ["@crustjs/crust-windows-x64@0.0.22", "", { "os": "win32", "cpu": "x64", "bin": { "crust": "bin/crust-bun-windows-x64-baseline.exe" } }, "sha512-4gFy0/NspWFvhhdqfwIxeO5g8xLGSulS9q06Hwe4YrxM2/eg/XB9Oioftfm5ERlk78svqC8/ZamLUrkhqhW9AA=="],
+    "@crustjs/crust-windows-x64": ["@crustjs/crust-windows-x64@0.0.23", "", { "os": "win32", "cpu": "x64", "bin": { "crust": "bin/crust-bun-windows-x64-baseline.exe" } }, "sha512-zBl37qIt/MksZfoVKYFoK+CRo/WaDgtrCyIo+NrJxr7esfrrxwwE6y7GfhwRv13AzwsvyXNAwXtVo8Mdo7c61A=="],
 
-    "@crustjs/plugins": ["@crustjs/plugins@0.0.19", "", { "dependencies": { "@crustjs/style": "0.0.5" }, "peerDependencies": { "@crustjs/core": "0.0.15", "typescript": "^5" } }, "sha512-z7riDW7q89Oa8YKaLTHvTSgSyLsATMlK1WZ3huhH6w9TvgO+a5AVCOgi7tqi0NDv0D0Bq1wj7Jj/qhnvccyaMQ=="],
+    "@crustjs/plugins": ["@crustjs/plugins@0.0.20", "", { "dependencies": { "@crustjs/style": "0.0.6" }, "peerDependencies": { "@crustjs/core": "0.0.15", "typescript": "^5" } }, "sha512-bXH67QK7fnV7Ko2dqgbZjsdbGrEHTF99fi92/gyXYcVY+ZKd61MVN1BDWCdTL0hC/11uYWHE3Qh9TgKVq4panQ=="],
 
-    "@crustjs/prompts": ["@crustjs/prompts@0.0.9", "", { "dependencies": { "@crustjs/style": "0.0.5" }, "peerDependencies": { "typescript": "^5" } }, "sha512-SXEUHZmfPgUDqkMPMDNF+LqHj1AnjZwQ4R9ne+sPv9BOoYR33UKw9nsuGGZrFGnZWz4eKUSrFiZre24OyctHwQ=="],
+    "@crustjs/prompts": ["@crustjs/prompts@0.0.10", "", { "dependencies": { "@crustjs/style": "0.0.6" }, "peerDependencies": { "typescript": "^5" } }, "sha512-NC9D0E4xEWfD8PHxgYjE775q5Om8KMydu1IEo9VMA76cvI1eJe5DjO+AL5ybOIupy8mRtDiErd3//1ZtEW+XYA=="],
 
-    "@crustjs/skills": ["@crustjs/skills@0.0.20", "", { "dependencies": { "@crustjs/prompts": "0.0.9", "@crustjs/style": "0.0.5" }, "peerDependencies": { "@crustjs/core": "0.0.15", "typescript": "^5" } }, "sha512-tpbCIfJmmbn7OvNGYKaxzfY5bYiQe+RGVD427xTazX/PHEZFLHv7EVziNJff2Q8F0VAIUW55EkpEA+0KqJO+Kg=="],
+    "@crustjs/skills": ["@crustjs/skills@0.0.21", "", { "dependencies": { "@crustjs/prompts": "0.0.10", "@crustjs/style": "0.0.6" }, "peerDependencies": { "@crustjs/core": "0.0.15", "typescript": "^5" } }, "sha512-7DqeSQE46GgSb7pW6am6DgjvwmuGBP/3kusxSO+g4sosQE6w/KZUdfWv6yEefY7NTJwtlX1axPlycyTTNPK2DQ=="],
 
     "@crustjs/store": ["@crustjs/store@0.0.4", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-pfYuykVBH08HKBpycPcBZrk4CSQMVhccENDANbJoGXX86YjZk5urjzaJGeGXR1S4DVCt6hGC15aiRf6SEbpyag=="],
 
-    "@crustjs/style": ["@crustjs/style@0.0.5", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-KZhxi2iCMYEMihMDmOrHkC4gl5INtogR9AEfbOkjwot74cmNQ2vTUfiZsLmWzBQ23nhPQ0vBwZBNFN+IpH+F0w=="],
+    "@crustjs/style": ["@crustjs/style@0.0.6", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-GB15j1g/IeOa+ZhacHOzEj9D7TKDFJ2axdwvTCyyfl3U1c+tbi+gBs+2HWmExDjEDhuN3ABwuUlLMljTUlxI4w=="],
 
     "@elysiajs/eden": ["@elysiajs/eden@1.4.8", "", { "peerDependencies": { "elysia": ">=1.4.19" } }, "sha512-a7oct2kFa49tH+GawZtSUCZR2rQgucNYgGLz8alXUqb4IrU3PASA0T4zXJw4MhdV1Xb6vyiR7p7kkqJcVjgbkA=="],
 
@@ -303,7 +303,7 @@
 
     "token-types": ["token-types@6.1.2", "", { "dependencies": { "@borewit/text-codec": "^0.2.1", "@tokenizer/token": "^0.3.0", "ieee754": "^1.2.1" } }, "sha512-dRXchy+C0IgK8WPC6xvCHFRIWYUbqqdEIKPaKo/AcTUNzwLTK6AH7RjdLWsEZcAN/TBdtfUw3PYEgPr5VPr6ww=="],
 
-    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+    "typescript": ["typescript@6.0.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-bGdAIrZ0wiGDo5l8c++HWtbaNCWTS4UTv7RaTH/ThVIgjkveJt83m74bBHMJkuCbslY8ixgLBVZJIOiQlQTjfQ=="],
 
     "uint8array-extras": ["uint8array-extras@1.5.0", "", {}, "sha512-rvKSBiC5zqCCiDZ9kAOszZcDvdAHwwIKJG33Ykj43OKcWsnmcBRL09YTU4nOeHZ8Y2a7l1MgTd08SBe9A8Qj6A=="],
 
