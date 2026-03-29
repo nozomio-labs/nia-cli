@@ -265,7 +265,8 @@ describe("config service", () => {
 	describe("getConfigDirPath", () => {
 		test("returns a path under XDG_CONFIG_HOME", () => {
 			const dir = getConfigDirPath();
-			expect(dir).toContain("/tmp/nia-cli-test-config");
+			expect(process.env.XDG_CONFIG_HOME).toBeDefined();
+			expect(dir).toContain(String(process.env.XDG_CONFIG_HOME));
 			expect(dir).toContain("nia");
 		});
 	});
