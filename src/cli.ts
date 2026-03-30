@@ -11,8 +11,13 @@ import pkg from "../package.json";
 import { app } from "./app.ts";
 import { authCommand } from "./commands/auth";
 import { categoriesCommand } from "./commands/categories";
+import { connectorsCommand } from "./commands/connectors";
 import { contextsCommand } from "./commands/contexts";
 import { datasetsCommand } from "./commands/datasets";
+import { depsCommand } from "./commands/deps";
+import { documentCommand } from "./commands/document";
+import { extractCommand } from "./commands/extract";
+import { gdriveCommand } from "./commands/gdrive";
 import { githubCommand } from "./commands/github";
 import { localCommand } from "./commands/local";
 import { oracleCommand } from "./commands/oracle";
@@ -20,9 +25,11 @@ import { packagesCommand } from "./commands/packages";
 import { papersCommand } from "./commands/papers";
 import { reposCommand } from "./commands/repos";
 import { searchCommand } from "./commands/search";
+import { slackCommand } from "./commands/slack";
 import { sourcesCommand } from "./commands/sources";
 import { tracerCommand } from "./commands/tracer";
 import { usageCommand } from "./commands/usage";
+import { xCommand } from "./commands/x-integration";
 import { experimentalModePlugin } from "./plugins/experimental.ts";
 import { APP_NAME } from "./services/config.ts";
 
@@ -60,6 +67,13 @@ const main = app
 	.command(papersCommand)
 	.command(datasetsCommand)
 	.command(categoriesCommand)
+	.command(extractCommand)
+	.command(documentCommand)
+	.command(depsCommand)
+	.command(connectorsCommand)
+	.command(slackCommand)
+	.command(gdriveCommand)
+	.command(xCommand)
 	.command(usageCommand)
 	.use(experimentalModePlugin())
 	.use(

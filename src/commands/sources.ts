@@ -1,9 +1,16 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { input } from "@crustjs/prompts";
 import { annotate } from "@crustjs/skills";
 import type { GrepRequest, SourceCreateRequest } from "nia-ai-ts";
-import { V2ApiDataSourcesService, V2ApiSourcesService } from "nia-ai-ts";
+import {
+	OpenAPI,
+	V2ApiDataSourcesService,
+	V2ApiSourcesService,
+} from "nia-ai-ts";
 import { app } from "../app.ts";
 import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
+import { resolveBaseUrl } from "../services/config.ts";
 import { createCliSdk, createSdk } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
@@ -794,6 +801,447 @@ const lsCommand = app
 		});
 	});
 
+const subscribeCommand = annotate(
+	app
+		.sub("subscribe")
+		.meta({
+			description: "Subscribe to a public source for instant access",
+		})
+		.args([
+			{
+				name: "url",
+				type: "string",
+				description:
+					"URL of the source (GitHub repo, docs URL, arXiv URL, or HuggingFace dataset)",
+				required: true,
+			},
+		] as const)
+		.flags({
+			type: {
+				type: "string",
+				description:
+					"Source type hint: repository, documentation, research_paper, huggingface_dataset",
+			},
+			ref: {
+				type: "string",
+				description: "Git ref for repositories (branch, tag, commit SHA)",
+			},
+		})
+		.run(async ({ args, flags }) => {
+			const fmt = createOutput({ color: flags.color });
+
+			await withErrorHandling({ domain: "Source" }, async () => {
+				await createSdk({ apiKey: flags["api-key"] });
+				const baseUrl = await resolveBaseUrl();
+				const token = OpenAPI.TOKEN;
+
+				const body: Record<string, unknown> = { url: args.url };
+				if (flags.type) {
+					body.source_type = flags.type;
+				}
+				if (flags.ref) {
+					body.ref = flags.ref;
+				}
+
+				const response = await fetch(`${baseUrl}/sources/subscribe`, {
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${token}`,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify(body),
+				});
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					throw new Error(
+						`Subscribe failed with status ${response.status}: ${errorText}`,
+					);
+				}
+
+				const result = (await response.json()) as Record<string, unknown>;
+				fmt.output(result);
+			});
+		}),
+	[
+		"Subscribe to already-indexed global sources for instant access without re-indexing.",
+		"Use when a source is already in the global pool — much faster than indexing from scratch.",
+	],
+);
+
+const writeCommand = app
+	.sub("write")
+	.meta({ description: "Write a file to an indexed source" })
+	.args([
+		{
+			name: "id",
+			type: "string",
+			description: "Source ID",
+			required: true,
+		},
+		{
+			name: "path",
+			type: "string",
+			description: "File path within the source",
+			required: true,
+		},
+	] as const)
+	.flags({
+		body: {
+			type: "string",
+			description: "Inline file content to write",
+		},
+		file: {
+			type: "string",
+			description: "Path to a local file whose content to upload",
+		},
+		encoding: {
+			type: "string",
+			description: "File encoding (default: utf8)",
+		},
+		language: {
+			type: "string",
+			description: "Programming language hint",
+		},
+	})
+	.run(async ({ args, flags }) => {
+		const fmt = createOutput({ color: flags.color });
+
+		if (!flags.body && !flags.file) {
+			fmt.error("Provide either --body or --file to specify file content.");
+			process.exit(1);
+		}
+
+		await withErrorHandling({ domain: "Source" }, async () => {
+			await createSdk({ apiKey: flags["api-key"] });
+			const baseUrl = await resolveBaseUrl();
+			const token = OpenAPI.TOKEN;
+
+			let content: string;
+			if (flags.file) {
+				content = readFileSync(flags.file, "utf8");
+			} else {
+				content = flags.body as string;
+			}
+
+			const body: Record<string, unknown> = {
+				path: args.path,
+				body: content,
+			};
+			if (flags.encoding) {
+				body.encoding = flags.encoding;
+			}
+			if (flags.language) {
+				body.language = flags.language;
+			}
+
+			const response = await fetch(`${baseUrl}/fs/${args.id}/files`, {
+				method: "PUT",
+				headers: {
+					Authorization: `Bearer ${token}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(body),
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(
+					`Write failed with status ${response.status}: ${errorText}`,
+				);
+			}
+
+			const result = (await response.json()) as Record<string, unknown>;
+			fmt.output(result);
+		});
+	});
+
+const mvCommand = app
+	.sub("mv")
+	.meta({ description: "Move or rename a file in a source" })
+	.args([
+		{
+			name: "id",
+			type: "string",
+			description: "Source ID",
+			required: true,
+		},
+		{
+			name: "old-path",
+			type: "string",
+			description: "Current file path within the source",
+			required: true,
+		},
+		{
+			name: "new-path",
+			type: "string",
+			description: "New file path within the source",
+			required: true,
+		},
+	] as const)
+	.run(async ({ args, flags }) => {
+		const fmt = createOutput({ color: flags.color });
+
+		await withErrorHandling({ domain: "Source" }, async () => {
+			await createSdk({ apiKey: flags["api-key"] });
+			const baseUrl = await resolveBaseUrl();
+			const token = OpenAPI.TOKEN;
+
+			const response = await fetch(`${baseUrl}/fs/${args.id}/mv`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${token}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					old_path: args["old-path"],
+					new_path: args["new-path"],
+				}),
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(
+					`Move failed with status ${response.status}: ${errorText}`,
+				);
+			}
+
+			const result = (await response.json()) as Record<string, unknown>;
+			fmt.output(result);
+		});
+	});
+
+const mkdirCommand = app
+	.sub("mkdir")
+	.meta({ description: "Create a directory in a source" })
+	.args([
+		{
+			name: "id",
+			type: "string",
+			description: "Source ID",
+			required: true,
+		},
+		{
+			name: "path",
+			type: "string",
+			description: "Directory path to create within the source",
+			required: true,
+		},
+	] as const)
+	.run(async ({ args, flags }) => {
+		const fmt = createOutput({ color: flags.color });
+
+		await withErrorHandling({ domain: "Source" }, async () => {
+			await createSdk({ apiKey: flags["api-key"] });
+			const baseUrl = await resolveBaseUrl();
+			const token = OpenAPI.TOKEN;
+
+			const response = await fetch(`${baseUrl}/fs/${args.id}/mkdir`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${token}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ path: args.path }),
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(
+					`Mkdir failed with status ${response.status}: ${errorText}`,
+				);
+			}
+
+			const result = (await response.json()) as Record<string, unknown>;
+			fmt.output(result);
+		});
+	});
+
+const rmCommand = app
+	.sub("rm")
+	.meta({ description: "Delete a file from a source" })
+	.args([
+		{
+			name: "id",
+			type: "string",
+			description: "Source ID",
+			required: true,
+		},
+		{
+			name: "path",
+			type: "string",
+			description: "File path to delete within the source",
+			required: true,
+		},
+	] as const)
+	.run(async ({ args, flags }) => {
+		const fmt = createOutput({ color: flags.color });
+
+		await withErrorHandling({ domain: "Source" }, async () => {
+			await createSdk({ apiKey: flags["api-key"] });
+			const baseUrl = await resolveBaseUrl();
+			const token = OpenAPI.TOKEN;
+
+			const response = await fetch(
+				`${baseUrl}/fs/${args.id}/files?path=${encodeURIComponent(args.path)}`,
+				{
+					method: "DELETE",
+					headers: {
+						Authorization: `Bearer ${token}`,
+					},
+				},
+			);
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(
+					`Delete failed with status ${response.status}: ${errorText}`,
+				);
+			}
+
+			const result = (await response.json()) as Record<string, unknown>;
+			fmt.output(result);
+		});
+	});
+
+const summaryCommand = app
+	.sub("summary")
+	.meta({ description: "Quick inventory of all source types" })
+	.run(async ({ flags }) => {
+		const fmt = createOutput({ color: flags.color });
+
+		await withErrorHandling({ domain: "Source" }, async () => {
+			await createSdk({ apiKey: flags["api-key"] });
+			const baseUrl = await resolveBaseUrl();
+			const token = OpenAPI.TOKEN;
+
+			const response = await fetch(`${baseUrl}/sources-summary`, {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(
+					`Summary failed with status ${response.status}: ${errorText}`,
+				);
+			}
+
+			const result = (await response.json()) as Record<string, unknown>;
+			fmt.output(result);
+		});
+	});
+
+const uploadCommand = app
+	.sub("upload")
+	.meta({ description: "Upload a PDF or file and create a source" })
+	.args([
+		{
+			name: "file",
+			type: "string",
+			description: "Path to the local file to upload",
+			required: true,
+		},
+	] as const)
+	.flags({
+		name: {
+			type: "string",
+			description: "Display name for the source",
+		},
+	})
+	.run(async ({ args, flags }) => {
+		const fmt = createOutput({ color: flags.color });
+
+		await withErrorHandling({ domain: "Source" }, async () => {
+			await createSdk({ apiKey: flags["api-key"] });
+			const baseUrl = await resolveBaseUrl();
+			const token = OpenAPI.TOKEN;
+
+			const filePath = args.file;
+			const fileName = path.basename(filePath);
+			const ext = path.extname(filePath).toLowerCase();
+
+			const contentTypeMap: Record<string, string> = {
+				".pdf": "application/pdf",
+				".csv": "text/csv",
+				".xlsx":
+					"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			};
+			const contentType = contentTypeMap[ext] ?? "application/octet-stream";
+
+			// Step 1: Get a signed upload URL
+			const uploadUrlResponse = await fetch(`${baseUrl}/sources/upload-url`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${token}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					filename: fileName,
+					content_type: contentType,
+				}),
+			});
+
+			if (!uploadUrlResponse.ok) {
+				const errorText = await uploadUrlResponse.text();
+				throw new Error(
+					`Failed to get upload URL (status ${uploadUrlResponse.status}): ${errorText}`,
+				);
+			}
+
+			const uploadUrlResult = (await uploadUrlResponse.json()) as {
+				upload_url: string;
+				gcs_path: string;
+			};
+
+			// Step 2: Upload the file content to the signed URL
+			const fileContent = readFileSync(filePath);
+			const uploadResponse = await fetch(uploadUrlResult.upload_url, {
+				method: "PUT",
+				headers: {
+					"Content-Type": contentType,
+				},
+				body: fileContent,
+			});
+
+			if (!uploadResponse.ok) {
+				const errorText = await uploadResponse.text();
+				throw new Error(
+					`File upload failed (status ${uploadResponse.status}): ${errorText}`,
+				);
+			}
+
+			// Step 3: Create the source with the GCS path
+			const createBody: Record<string, unknown> = {
+				gcs_path: uploadUrlResult.gcs_path,
+			};
+			if (flags.name) {
+				createBody.display_name = flags.name;
+			}
+
+			const createResponse = await fetch(`${baseUrl}/sources`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${token}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(createBody),
+			});
+
+			if (!createResponse.ok) {
+				const errorText = await createResponse.text();
+				throw new Error(
+					`Source creation failed (status ${createResponse.status}): ${errorText}`,
+				);
+			}
+
+			const result = (await createResponse.json()) as Record<string, unknown>;
+			fmt.output(result);
+		});
+	});
+
 // --- Parent command ---
 
 export const sourcesCommand = annotate(
@@ -811,7 +1259,14 @@ export const sourcesCommand = annotate(
 		.command(readCommand)
 		.command(grepCommand)
 		.command(treeCommand)
-		.command(lsCommand),
+		.command(lsCommand)
+		.command(subscribeCommand)
+		.command(writeCommand)
+		.command(mvCommand)
+		.command(mkdirCommand)
+		.command(rmCommand)
+		.command(summaryCommand)
+		.command(uploadCommand),
 	[
 		"Manages documentation, research papers, and HuggingFace datasets as indexed data sources.",
 		"Most commands accept flexible identifiers: UUID, display name, or URL.",
