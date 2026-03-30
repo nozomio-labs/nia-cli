@@ -110,7 +110,7 @@ const main = app
 2. **If the source is already indexed, search inside Nia**
    - Use \`nia search query\` or \`nia search universal\` for answers.
    - Use \`nia repos tree\`, \`nia repos grep\`, \`nia repos read\`, \`nia sources tree\`, \`nia sources ls\`, \`nia sources grep\`, and \`nia sources read\` for direct inspection.
-   - Use \`nia document query <source-id> "question"\` to ask AI questions about indexed PDFs/documents with citations.
+   - Use \`nia document agent <source-id> "question"\` to ask AI questions about indexed PDFs/documents with citations.
 3. **If the source is not indexed but the identifier is known, index it first**
    - Repo: \`nia repos index <owner/repo>\`
    - Docs: \`nia sources index <root-doc-url>\`
@@ -130,7 +130,7 @@ const main = app
 - **Detect elements in documents**: \`nia extract detect <source>\` — find symbols, annotations, and elements.
 - **Engineering drawings**: \`nia extract engineering <source>\` — extract dimensions, tolerances, title blocks from technical drawings.
 - **Query extractions**: \`nia extract query <extraction-id> "question"\` — ask follow-up questions about extracted data.
-- **Document agent**: \`nia document query <source-id> "question"\` — AI-powered Q&A with citations over any indexed document.
+- **Document agent**: \`nia document agent <source-id> "question"\` — AI-powered Q&A with citations over any indexed document.
 
 #### Dependency Management
 

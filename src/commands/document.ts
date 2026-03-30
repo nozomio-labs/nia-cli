@@ -26,21 +26,24 @@ interface DocumentAgentResponse {
 
 // --- Subcommands ---
 
-const queryCommand = annotate(
+const agentCommand = annotate(
 	app
-		.sub("query")
-		.meta({ description: "Query a document with AI agent" })
+		.sub("agent")
+		.meta({
+			description:
+				"Run an AI agent that searches, reads, and analyzes a document to answer your question",
+		})
 		.args([
 			{
 				name: "source-id",
 				type: "string",
-				description: "Source ID of the document to query",
+				description: "Source ID of the indexed document",
 				required: true,
 			},
 			{
 				name: "question",
 				type: "string",
-				description: "Question to ask about the document",
+				description: "Question to investigate",
 				required: true,
 			},
 		] as const)
@@ -204,8 +207,9 @@ const queryCommand = annotate(
 			});
 		}),
 	[
-		"Query a document using the AI document agent.",
-		"Pass --stream to receive the response as a real-time stream.",
+		"Multi-step AI agent that autonomously searches, reads pages, and analyzes document sections to answer your question.",
+		"Not a simple lookup — the agent uses tools (search, read sections, read pages) to research the document before responding.",
+		"Pass --stream to watch the agent's progress in real-time.",
 		"Use --schema to request structured JSON output conforming to a schema.",
 	],
 );
@@ -213,10 +217,14 @@ const queryCommand = annotate(
 export const documentCommand = annotate(
 	app
 		.sub("document")
-		.meta({ description: "Query documents with AI agent" })
-		.command(queryCommand),
+		.meta({
+			description:
+				"AI document agent — multi-step research over indexed PDFs and documents",
+		})
+		.command(agentCommand),
 	[
-		"AI-powered document querying with citations.",
-		"Use `nia document query <source-id> <question>` to ask questions about indexed documents.",
+		"Autonomous AI agent that researches indexed documents with tool use (search, read, analyze).",
+		"Use `nia document agent <source-id> <question>` to run the agent against any indexed document.",
+		"Returns answers with page-level citations.",
 	],
 );
