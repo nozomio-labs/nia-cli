@@ -47,13 +47,11 @@ const queryCommand = annotate(
 		.flags({
 			model: {
 				type: "string",
-				description:
-					"Model to use (default: claude-opus-4-6-1m)",
+				description: "Model to use (default: claude-opus-4-6-1m)",
 			},
 			schema: {
 				type: "string",
-				description:
-					"JSON schema string for structured output",
+				description: "JSON schema string for structured output",
 			},
 			stream: {
 				type: "boolean",
@@ -100,24 +98,20 @@ const queryCommand = annotate(
 
 				if (flags.stream) {
 					// Streaming mode: SSE parsing similar to oracle chat
-					const response = await fetch(
-						`${baseUrl}/document/agent`,
-						{
-							method: "POST",
-							headers: {
-								Authorization: `Bearer ${token}`,
-								"Content-Type": "application/json",
-							},
-							body: JSON.stringify(body),
+					const response = await fetch(`${baseUrl}/document/agent`, {
+						method: "POST",
+						headers: {
+							Authorization: `Bearer ${token}`,
+							"Content-Type": "application/json",
 						},
-					);
+						body: JSON.stringify(body),
+					});
 
 					if (!response.ok || !response.body) {
 						const err = new Error(
 							`Document agent request failed with status ${response.status}`,
 						);
-						(err as Error & { status: number }).status =
-							response.status;
+						(err as Error & { status: number }).status = response.status;
 						throw err;
 					}
 
@@ -140,10 +134,7 @@ const queryCommand = annotate(
 							if (!payload) continue;
 
 							try {
-								const event = JSON.parse(payload) as Record<
-									string,
-									unknown
-								>;
+								const event = JSON.parse(payload) as Record<string, unknown>;
 								renderStreamEvent(event, {
 									color: flags.color,
 								});
@@ -156,29 +147,24 @@ const queryCommand = annotate(
 					}
 				} else {
 					// Non-streaming mode: single POST request
-					const response = await fetch(
-						`${baseUrl}/document/agent`,
-						{
-							method: "POST",
-							headers: {
-								Authorization: `Bearer ${token}`,
-								"Content-Type": "application/json",
-							},
-							body: JSON.stringify(body),
+					const response = await fetch(`${baseUrl}/document/agent`, {
+						method: "POST",
+						headers: {
+							Authorization: `Bearer ${token}`,
+							"Content-Type": "application/json",
 						},
-					);
+						body: JSON.stringify(body),
+					});
 
 					if (!response.ok) {
 						const err = new Error(
 							`Document agent request failed with status ${response.status}`,
 						);
-						(err as Error & { status: number }).status =
-							response.status;
+						(err as Error & { status: number }).status = response.status;
 						throw err;
 					}
 
-					const result =
-						(await response.json()) as DocumentAgentResponse;
+					const result = (await response.json()) as DocumentAgentResponse;
 
 					// Display the answer
 					console.log(result.answer);
@@ -200,9 +186,7 @@ const queryCommand = annotate(
 								console.log(`    Page: ${citation.page_number}`);
 							}
 							if (citation.tool_source) {
-								console.log(
-									`    Source: ${citation.tool_source}`,
-								);
+								console.log(`    Source: ${citation.tool_source}`);
 							}
 							if (citation.content) {
 								console.log(`    ${citation.content}`);

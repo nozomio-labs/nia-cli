@@ -390,7 +390,9 @@ const queryCommand = annotate(
 				);
 
 				if (!response.ok || !response.body) {
-					const err = new Error(`Request failed with status ${response.status}`);
+					const err = new Error(
+						`Request failed with status ${response.status}`,
+					);
 					(err as Error & { status: number }).status = response.status;
 					throw err;
 				}
@@ -415,7 +417,10 @@ const queryCommand = annotate(
 
 						try {
 							const event = JSON.parse(payload) as Record<string, unknown>;
-							if (event.type === "answer_chunk" && typeof event.content === "string") {
+							if (
+								event.type === "answer_chunk" &&
+								typeof event.content === "string"
+							) {
 								process.stdout.write(event.content);
 							}
 						} catch {}
@@ -450,11 +455,7 @@ const listCommand = app
 	.run(async ({ flags }) => {
 		const fmt = createOutput({ color: flags.color });
 
-		if (
-			flags.type &&
-			flags.type !== "table" &&
-			flags.type !== "engineering"
-		) {
+		if (flags.type && flags.type !== "table" && flags.type !== "engineering") {
 			fmt.error(
 				`Invalid extraction type: "${flags.type}". Allowed for listing: table, engineering`,
 			);

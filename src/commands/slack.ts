@@ -10,7 +10,11 @@ import { createOutput } from "../utils/output.ts";
 async function slackFetch(
 	flags: { "api-key"?: string },
 	path: string,
-	options: { method?: string; body?: unknown; query?: Record<string, string> } = {},
+	options: {
+		method?: string;
+		body?: unknown;
+		query?: Record<string, string>;
+	} = {},
 ): Promise<unknown> {
 	await createSdk({ apiKey: flags["api-key"] });
 	const baseUrl = await resolveBaseUrl();
@@ -47,7 +51,7 @@ async function slackFetch(
 	const response = await fetch(url, init);
 	if (!response.ok) {
 		const err = new Error(`Request failed with status ${response.status}`);
-		(err as any).status = response.status;
+		(err as Error & { status: number }).status = response.status;
 		throw err;
 	}
 

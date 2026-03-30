@@ -33,7 +33,7 @@ async function xFetch(
 	const response = await fetch(`${baseUrl}${path}`, init);
 	if (!response.ok) {
 		const err = new Error(`Request failed with status ${response.status}`);
-		(err as any).status = response.status;
+		(err as Error & { status: number }).status = response.status;
 		throw err;
 	}
 
@@ -133,10 +133,7 @@ const statusCommand = app
 		const fmt = createOutput({ color: flags.color });
 
 		await withErrorHandling({ domain: "X" }, async () => {
-			const result = await xFetch(
-				flags,
-				`/x/installations/${args.id}/status`,
-			);
+			const result = await xFetch(flags, `/x/installations/${args.id}/status`);
 			fmt.output(result);
 		});
 	});
@@ -156,11 +153,9 @@ const indexCommand = app
 		const fmt = createOutput({ color: flags.color });
 
 		await withErrorHandling({ domain: "X" }, async () => {
-			const result = await xFetch(
-				flags,
-				`/x/installations/${args.id}/index`,
-				{ method: "POST" },
-			);
+			const result = await xFetch(flags, `/x/installations/${args.id}/index`, {
+				method: "POST",
+			});
 			fmt.output(result);
 		});
 	});
@@ -180,11 +175,9 @@ const deleteCommand = app
 		const fmt = createOutput({ color: flags.color });
 
 		await withErrorHandling({ domain: "X" }, async () => {
-			const result = await xFetch(
-				flags,
-				`/x/installations/${args.id}`,
-				{ method: "DELETE" },
-			);
+			const result = await xFetch(flags, `/x/installations/${args.id}`, {
+				method: "DELETE",
+			});
 			fmt.output(result);
 		});
 	});

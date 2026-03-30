@@ -17,7 +17,7 @@ const MANIFEST_TYPE_MAP: Record<string, string> = {
 	"pyproject.toml": "pyproject.toml",
 	"Cargo.toml": "Cargo.toml",
 	"go.mod": "go.mod",
-	"Gemfile": "Gemfile",
+	Gemfile: "Gemfile",
 };
 
 /**
@@ -48,9 +48,7 @@ async function apiFetch(
 	});
 
 	if (!response.ok) {
-		const err = new Error(
-			`Request failed with status ${response.status}`,
-		);
+		const err = new Error(`Request failed with status ${response.status}`);
 		(err as Error & { status: number; body?: unknown }).status =
 			response.status;
 		try {
@@ -72,7 +70,8 @@ const analyzeCommand = app
 		{
 			name: "file",
 			type: "string",
-			description: "Path to a manifest file (e.g., package.json, requirements.txt)",
+			description:
+				"Path to a manifest file (e.g., package.json, requirements.txt)",
 			required: true,
 		},
 	] as const)
@@ -153,7 +152,8 @@ const subscribeCommand = app
 		{
 			name: "file",
 			type: "string",
-			description: "Path to a manifest file (e.g., package.json, requirements.txt)",
+			description:
+				"Path to a manifest file (e.g., package.json, requirements.txt)",
 			required: true,
 		},
 	] as const)
@@ -261,23 +261,13 @@ const uploadCommand = app
 			const filename = path.basename(filePath);
 
 			const formData = new FormData();
-			formData.append(
-				"file",
-				new Blob([fileContent]),
-				filename,
-			);
+			formData.append("file", new Blob([fileContent]), filename);
 
 			if (flags.dev !== undefined) {
-				formData.append(
-					"include_dev_dependencies",
-					String(flags.dev),
-				);
+				formData.append("include_dev_dependencies", String(flags.dev));
 			}
 			if (flags["max-indexes"] !== undefined) {
-				formData.append(
-					"max_new_indexes",
-					String(flags["max-indexes"]),
-				);
+				formData.append("max_new_indexes", String(flags["max-indexes"]));
 			}
 
 			const baseUrl = await resolveBaseUrl();
@@ -292,9 +282,7 @@ const uploadCommand = app
 			});
 
 			if (!response.ok) {
-				const err = new Error(
-					`Upload failed with status ${response.status}`,
-				);
+				const err = new Error(`Upload failed with status ${response.status}`);
 				(err as Error & { status: number; body?: unknown }).status =
 					response.status;
 				try {
@@ -314,7 +302,9 @@ const uploadCommand = app
 export const depsCommand = annotate(
 	app
 		.sub("deps")
-		.meta({ description: "Manage project dependencies and auto-subscribe to docs" })
+		.meta({
+			description: "Manage project dependencies and auto-subscribe to docs",
+		})
 		.command(analyzeCommand)
 		.command(subscribeCommand)
 		.command(uploadCommand),

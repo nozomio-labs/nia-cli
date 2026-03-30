@@ -33,7 +33,7 @@ async function connectorFetch(
 	const response = await fetch(`${baseUrl}${path}`, init);
 	if (!response.ok) {
 		const err = new Error(`Request failed with status ${response.status}`);
-		(err as any).status = response.status;
+		(err as Error & { status: number }).status = response.status;
 		throw err;
 	}
 
