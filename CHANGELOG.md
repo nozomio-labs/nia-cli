@@ -1,5 +1,12 @@
 # nia-cli
 
+## 0.0.11
+
+### Patch Changes
+
+- d1644c1: Add new CLI commands: extract (table/detect/engineering), document agent, deps (analyze/subscribe/upload), connectors, slack, gdrive, x integrations. Add sources subcommands: subscribe, write, mv, mkdir, rm, summary, upload.
+- bf84003: Improve CLI compatibility and experimental API behavior across auth, usage, oracle, and sources commands. This includes persisting the `--experimental` API preference, normalizing usage output across multiple response shapes, and improving `nia sources resolve` multi-match output with clearer IDs and `nia search query` follow-up guidance.
+
 ## 0.0.10
 
 ### Patch Changes
