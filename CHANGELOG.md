@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.0.12
+
+### Patch Changes
+
+- Add extract, document agent, deps, connectors, slack, gdrive, x commands. Add sources subscribe, write, mv, mkdir, rm, summary, upload subcommands. Update skill instructions for AI agent discovery.
+
 ## 0.0.11
 
 ### Patch Changes
