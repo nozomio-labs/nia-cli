@@ -1,3 +1,4 @@
+import { annotate } from "@crustjs/skills";
 import { OpenAPI } from "nia-ai-ts";
 import { app } from "../app.ts";
 import { resolveBaseUrl } from "../services/config.ts";
@@ -184,11 +185,18 @@ const deleteCommand = app
 
 // --- Parent command ---
 
-export const xCommand = app
-	.sub("x")
-	.meta({ description: "Manage X/Twitter integrations" })
-	.command(installCommand)
-	.command(listCommand)
-	.command(statusCommand)
-	.command(indexCommand)
-	.command(deleteCommand);
+export const xCommand = annotate(
+	app
+		.sub("x")
+		.meta({ description: "Manage X/Twitter integrations" })
+		.command(installCommand)
+		.command(listCommand)
+		.command(statusCommand)
+		.command(indexCommand)
+		.command(deleteCommand),
+	[
+		"Index X/Twitter posts for searchable access via Nia.",
+		"Requires a bearer token from the X API developer portal.",
+		"Use `install` to set up, `index` to trigger indexing.",
+	],
+);

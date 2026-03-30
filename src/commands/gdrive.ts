@@ -1,3 +1,4 @@
+import { annotate } from "@crustjs/skills";
 import { OpenAPI } from "nia-ai-ts";
 import { app } from "../app.ts";
 import { resolveBaseUrl } from "../services/config.ts";
@@ -269,13 +270,21 @@ const deleteCommand = app
 
 // --- Parent command ---
 
-export const gdriveCommand = app
-	.sub("gdrive")
-	.meta({ description: "Manage Google Drive integrations" })
-	.command(installCommand)
-	.command(listCommand)
-	.command(browseCommand)
-	.command(indexCommand)
-	.command(statusCommand)
-	.command(syncCommand)
-	.command(deleteCommand);
+export const gdriveCommand = annotate(
+	app
+		.sub("gdrive")
+		.meta({ description: "Manage Google Drive integrations" })
+		.command(installCommand)
+		.command(listCommand)
+		.command(browseCommand)
+		.command(indexCommand)
+		.command(statusCommand)
+		.command(syncCommand)
+		.command(deleteCommand),
+	[
+		"Connect Google Drive to index and search documents, spreadsheets, and PDFs.",
+		"Use `install` to start OAuth flow, `browse` to explore Drive items.",
+		"Use `index` to trigger indexing of selected files/folders.",
+		"Indexed Drive content is searchable via `nia search query`.",
+	],
+);

@@ -1,3 +1,4 @@
+import { annotate } from "@crustjs/skills";
 import { OpenAPI } from "nia-ai-ts";
 import { app } from "../app.ts";
 import { resolveBaseUrl } from "../services/config.ts";
@@ -164,12 +165,19 @@ const deleteCommand = app
 
 // --- Parent command ---
 
-export const connectorsCommand = app
-	.sub("connectors")
-	.meta({ description: "Manage connector integrations" })
-	.command(listCommand)
-	.command(installationsCommand)
-	.command(installCommand)
-	.command(statusCommand)
-	.command(indexCommand)
-	.command(deleteCommand);
+export const connectorsCommand = annotate(
+	app
+		.sub("connectors")
+		.meta({ description: "Manage connector integrations" })
+		.command(listCommand)
+		.command(installationsCommand)
+		.command(installCommand)
+		.command(statusCommand)
+		.command(indexCommand)
+		.command(deleteCommand),
+	[
+		"Generic connector management for third-party integrations (Airtable, Notion, etc.).",
+		"Use `list` to see available connector types, `install` to set one up.",
+		"For Slack, Google Drive, and X use the dedicated `nia slack`, `nia gdrive`, `nia x` commands instead.",
+	],
+);

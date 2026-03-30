@@ -1,3 +1,4 @@
+import { annotate } from "@crustjs/skills";
 import { OpenAPI } from "nia-ai-ts";
 import { app } from "../app.ts";
 import { resolveBaseUrl } from "../services/config.ts";
@@ -308,15 +309,23 @@ const deleteCommand = app
 
 // --- Parent command ---
 
-export const slackCommand = app
-	.sub("slack")
-	.meta({ description: "Manage Slack integrations" })
-	.command(installCommand)
-	.command(installTokenCommand)
-	.command(listCommand)
-	.command(channelsCommand)
-	.command(grepCommand)
-	.command(messagesCommand)
-	.command(indexCommand)
-	.command(statusCommand)
-	.command(deleteCommand);
+export const slackCommand = annotate(
+	app
+		.sub("slack")
+		.meta({ description: "Manage Slack integrations" })
+		.command(installCommand)
+		.command(installTokenCommand)
+		.command(listCommand)
+		.command(channelsCommand)
+		.command(grepCommand)
+		.command(messagesCommand)
+		.command(indexCommand)
+		.command(statusCommand)
+		.command(deleteCommand),
+	[
+		"Connect Slack workspaces to search and index messages.",
+		"Use `install-token` to register a bot token (BYOT), or `install` for OAuth flow.",
+		"Use `grep` to search indexed messages, `messages` to read recent live messages.",
+		"Indexed Slack messages are also searchable via `nia search query`.",
+	],
+);
