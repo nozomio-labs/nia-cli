@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.0.13
+
+### Patch Changes
+
+- Rename `nia document query` to `nia document agent` to clarify multi-step AI agent behavior.
+
 ## 0.0.12
 
 ### Patch Changes
