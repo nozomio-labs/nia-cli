@@ -41,7 +41,7 @@
 		"publish": "crust build --package && crust publish && changeset tag"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.9",
+		"@biomejs/biome": "2.4.10",
 		"@changesets/cli": "^2.30.0",
 		"@crustjs/core": "0.0.15",
 		"@crustjs/crust": "0.0.23",
@@ -55,7 +55,7 @@
 		"typescript": "^6.0.2"
 	},
 	"dependencies": {
-		"@nozomioai/nia-sdk": "^0.0.0",
+		"@nozomioai/nia-sdk": "^0.0.2",
 		"chokidar": "^5.0.0"
 	}
 }
