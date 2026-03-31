@@ -4,6 +4,7 @@ import {
 	configStore,
 	DEFAULT_BASE_URL,
 	EXPERIMENTAL_BASE_URL,
+	getExperimentalOverride,
 	resolveApiKey,
 	resolveBaseUrl,
 } from "./config.ts";
@@ -219,7 +220,8 @@ async function resolveClientContext(
 		baseUrl,
 		experimental: options.baseUrl
 			? options.baseUrl === EXPERIMENTAL_BASE_URL
-			: config.useExperimentalApi || baseUrl === EXPERIMENTAL_BASE_URL,
+			: getExperimentalOverride() ??
+				(config.useExperimentalApi || baseUrl === EXPERIMENTAL_BASE_URL),
 	};
 }
 

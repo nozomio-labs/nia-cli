@@ -145,6 +145,7 @@ import { createCliSdk } from "../../src/services/sdk.ts";
 import {
 	getConfigDirPath,
 	resetConfig,
+	setExperimentalOverride,
 	writeConfig,
 } from "../helpers/config-store.ts";
 
@@ -157,6 +158,8 @@ describe("cli sdk adapter", () => {
 		}
 
 		delete process.env.NIA_API_KEY;
+		delete process.env.NIA_BASE_URL;
+		setExperimentalOverride(undefined);
 		mockCreateExperimentalClient.mockClear();
 		mockExperimentalUsageGet.mockClear();
 		mockExperimentalSourcesPost.mockClear();
@@ -176,6 +179,8 @@ describe("cli sdk adapter", () => {
 			// Ignore
 		}
 		delete process.env.NIA_API_KEY;
+		delete process.env.NIA_BASE_URL;
+		setExperimentalOverride(undefined);
 	});
 
 	test("uses the experimental sdk for usage when experimental mode is enabled", async () => {
@@ -280,6 +285,37 @@ describe("cli sdk adapter", () => {
 		expect(mockCreateExperimentalClient).not.toHaveBeenCalled();
 		expect(mockLegacyUsageGet).toHaveBeenCalledTimes(1);
 		expect(mockLegacySourcesList).toHaveBeenCalledWith({ query: "legacy" });
+	});
+
+	test("uses the experimental sdk for one invocation when runtime override is enabled", async () => {
+		await writeConfig({
+			apiKey: "nia_std_key",
+			baseUrl: "https://apigcp.trynia.ai/v2",
+			useExperimentalApi: false,
+			output: undefined,
+		});
+		setExperimentalOverride(true);
+
+		const sdk = await createCliSdk();
+
+		expect(sdk.experimental).toBe(true);
+		expect(mockCreateExperimentalClient).toHaveBeenCalledTimes(1);
+	});
+
+	test("forces the legacy sdk for one invocation when runtime override disables experimental mode", async () => {
+		process.env.NIA_BASE_URL = "https://api.trynia.ai";
+		await writeConfig({
+			apiKey: "nia_exp_key",
+			baseUrl: "https://configured.example.com",
+			useExperimentalApi: true,
+			output: undefined,
+		});
+		setExperimentalOverride(false);
+
+		const sdk = await createCliSdk();
+
+		expect(sdk.experimental).toBe(false);
+		expect(mockCreateExperimentalClient).not.toHaveBeenCalled();
 	});
 
 	test("rethrows experimental client errors with status for shared error handling", async () => {

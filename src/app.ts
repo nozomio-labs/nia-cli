@@ -1,7 +1,29 @@
-import { Crust } from "@crustjs/core";
+import { Crust, type CommandNode } from "@crustjs/core";
 import { renderHelp } from "@crustjs/plugins";
 import pkg from "../package.json";
-import { APP_NAME } from "./services/config.ts";
+import { APP_NAME, persistExperimentalPreference } from "./services/config.ts";
+
+export async function runRootCommand({
+	command,
+	flags,
+}: {
+	command: CommandNode;
+	flags: Record<string, unknown>;
+}): Promise<void> {
+	const experimental = flags.experimental;
+
+	if (typeof experimental === "boolean") {
+		await persistExperimentalPreference(experimental);
+		console.log(
+			experimental
+				? "Experimental API enabled. Future commands will use the experimental API."
+				: "Experimental API disabled. Future commands will use the standard API.",
+		);
+		return;
+	}
+
+	console.log(renderHelp(command));
+}
 
 /**
  * Root CLI builder with inheritable global flags.
@@ -33,17 +55,9 @@ export const app = new Crust(APP_NAME)
 			inherit: true,
 		},
 	})
-	.run(({ command, flags }) => {
-		const experimental = (flags as Record<string, unknown>).experimental;
-
-		if (typeof experimental === "boolean") {
-			console.log(
-				experimental
-					? "Experimental API enabled. Future commands will use the experimental API."
-					: "Experimental API disabled. Future commands will use the standard API.",
-			);
-			return;
-		}
-
-		console.log(renderHelp(command));
-	});
+	.run(({ command, flags }) =>
+		runRootCommand({
+			command,
+			flags: flags as Record<string, unknown>,
+		}),
+	);

@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import {
 	getConfigDirPath,
+	getExperimentalOverride,
 	maskApiKey,
 	persistExperimentalPreference,
 	readConfig,
 	resetConfig,
 	resolveApiKey,
 	resolveBaseUrl,
+	setExperimentalOverride,
 	updateConfig,
 	writeConfig,
 } from "../helpers/config-store.ts";
@@ -15,6 +17,7 @@ import {
 describe("config service", () => {
 	beforeEach(async () => {
 		// Clean the config file before each test
+		setExperimentalOverride(undefined);
 		try {
 			await resetConfig();
 		} catch {
@@ -34,6 +37,7 @@ describe("config service", () => {
 		// Clean env vars set by tests
 		delete process.env.NIA_API_KEY;
 		delete process.env.NIA_BASE_URL;
+		setExperimentalOverride(undefined);
 	});
 
 	describe("readConfig", () => {
@@ -237,6 +241,33 @@ describe("config service", () => {
 
 			const url = await resolveBaseUrl("https://override.example.com");
 			expect(url).toBe("https://override.example.com");
+		});
+
+		test("prefers runtime experimental override over env and config", async () => {
+			process.env.NIA_BASE_URL = "https://env.example.com";
+			await writeConfig({
+				apiKey: undefined,
+				baseUrl: "https://configured.com",
+				useExperimentalApi: false,
+			});
+			setExperimentalOverride(true);
+
+			const url = await resolveBaseUrl();
+			expect(url).toBe("https://api.trynia.ai");
+			expect(getExperimentalOverride()).toBe(true);
+		});
+
+		test("runtime disable override ignores experimental env and persisted mode", async () => {
+			process.env.NIA_BASE_URL = "https://api.trynia.ai";
+			await writeConfig({
+				apiKey: undefined,
+				baseUrl: "https://configured.com",
+				useExperimentalApi: true,
+			});
+			setExperimentalOverride(false);
+
+			const url = await resolveBaseUrl();
+			expect(url).toBe("https://configured.com");
 		});
 	});
 

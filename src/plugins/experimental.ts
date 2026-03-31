@@ -1,9 +1,10 @@
 import type { CommandNode, CrustPlugin, FlagDef } from "@crustjs/core";
-import { persistExperimentalPreference } from "../services/config.ts";
+import { setExperimentalOverride } from "../services/config.ts";
 
 const experimentalFlagDef: FlagDef = {
 	type: "boolean",
-	description: "Persist and use the experimental load-balanced API",
+	description:
+		"Use the experimental load-balanced API for this command; root-only usage persists the preference",
 	inherit: true,
 };
 
@@ -27,7 +28,13 @@ export function experimentalModePlugin(): CrustPlugin {
 		async middleware(context, next) {
 			const experimental = context.input?.flags.experimental;
 			if (typeof experimental === "boolean") {
-				await persistExperimentalPreference(experimental);
+				setExperimentalOverride(experimental);
+				try {
+					await next();
+				} finally {
+					setExperimentalOverride(undefined);
+				}
+				return;
 			}
 
 			await next();

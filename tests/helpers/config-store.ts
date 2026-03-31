@@ -1,11 +1,13 @@
 import {
 	configStore,
+	getExperimentalOverride,
 	getConfigDirPath,
 	maskApiKey,
 	type NiaConfig,
 	persistExperimentalPreference,
 	resolveApiKey,
 	resolveBaseUrl,
+	setExperimentalOverride,
 } from "../../src/services/config.ts";
 
 export {
@@ -14,6 +16,8 @@ export {
 	persistExperimentalPreference,
 	resolveApiKey,
 	resolveBaseUrl,
+	getExperimentalOverride,
+	setExperimentalOverride,
 };
 
 type LegacyConfig = Omit<NiaConfig, "useExperimentalApi"> & {

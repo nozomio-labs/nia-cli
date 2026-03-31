@@ -4,6 +4,8 @@ export const APP_NAME = "nia";
 export const DEFAULT_BASE_URL = "https://apigcp.trynia.ai/v2";
 export const EXPERIMENTAL_BASE_URL = "https://api.trynia.ai";
 
+let experimentalOverride: boolean | undefined;
+
 export const configStore = createStore({
 	dirPath: configDir(APP_NAME),
 	name: "config",
@@ -26,6 +28,14 @@ export const configStore = createStore({
 });
 
 export type NiaConfig = Awaited<ReturnType<typeof configStore.read>>;
+
+export function getExperimentalOverride(): boolean | undefined {
+	return experimentalOverride;
+}
+
+export function setExperimentalOverride(enabled?: boolean): void {
+	experimentalOverride = enabled;
+}
 
 /**
  * The active config directory path.
@@ -79,9 +89,10 @@ export async function resolveApiKey(
 /**
  * Resolve the API base URL from the config resolution chain:
  * 1. Override (from CLI flag)
- * 2. Persistent experimental mode
- * 3. NIA_BASE_URL environment variable
- * 4. Config file (~/.config/nia/config.json)
+ * 2. Per-invocation experimental override
+ * 3. Persistent experimental mode
+ * 4. NIA_BASE_URL environment variable
+ * 5. Config file (~/.config/nia/config.json)
  *
  * Returns the default URL if no override is found.
  */
@@ -91,11 +102,29 @@ export async function resolveBaseUrl(override?: string): Promise<string> {
 	}
 
 	const config = await configStore.read();
+	const runtimeOverride = getExperimentalOverride();
+	const envBaseUrl = process.env.NIA_BASE_URL;
+
+	if (runtimeOverride === true) {
+		return EXPERIMENTAL_BASE_URL;
+	}
+
+	if (runtimeOverride === false) {
+		if (envBaseUrl && envBaseUrl !== EXPERIMENTAL_BASE_URL) {
+			return envBaseUrl;
+		}
+
+		if (config.baseUrl !== EXPERIMENTAL_BASE_URL) {
+			return config.baseUrl;
+		}
+
+		return DEFAULT_BASE_URL;
+	}
+
 	if (config.useExperimentalApi) {
 		return EXPERIMENTAL_BASE_URL;
 	}
 
-	const envBaseUrl = process.env.NIA_BASE_URL;
 	if (envBaseUrl) {
 		return envBaseUrl;
 	}

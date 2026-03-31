@@ -5,6 +5,7 @@ import { configureOpenApi, createSdk } from "../../src/services/sdk.ts";
 import {
 	getConfigDirPath,
 	resetConfig,
+	setExperimentalOverride,
 	writeConfig,
 } from "../helpers/config-store.ts";
 
@@ -16,6 +17,8 @@ describe("sdk service", () => {
 			// Ignore
 		}
 		delete process.env.NIA_API_KEY;
+		delete process.env.NIA_BASE_URL;
+		setExperimentalOverride(undefined);
 	});
 
 	afterEach(() => {
@@ -26,6 +29,8 @@ describe("sdk service", () => {
 			// Ignore
 		}
 		delete process.env.NIA_API_KEY;
+		delete process.env.NIA_BASE_URL;
+		setExperimentalOverride(undefined);
 	});
 
 	describe("createSdk", () => {
@@ -88,6 +93,33 @@ describe("sdk service", () => {
 
 			await createSdk();
 			expect(OpenAPI.BASE).toBe("https://api.trynia.ai");
+		});
+
+		test("uses experimental base URL when runtime override is enabled", async () => {
+			await writeConfig({
+				apiKey: "nia_from_config",
+				baseUrl: "https://configured.example.com",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+			setExperimentalOverride(true);
+
+			await createSdk();
+			expect(OpenAPI.BASE).toBe("https://api.trynia.ai");
+		});
+
+		test("uses standard base URL when runtime override disables experimental mode", async () => {
+			process.env.NIA_BASE_URL = "https://api.trynia.ai";
+			await writeConfig({
+				apiKey: "nia_from_config",
+				baseUrl: "https://configured.example.com",
+				useExperimentalApi: true,
+				output: undefined,
+			});
+			setExperimentalOverride(false);
+
+			await createSdk();
+			expect(OpenAPI.BASE).toBe("https://configured.example.com");
 		});
 
 		test("override API key takes priority over env", async () => {
