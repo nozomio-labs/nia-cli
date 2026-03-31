@@ -2,16 +2,17 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { input } from "@crustjs/prompts";
 import { annotate } from "@crustjs/skills";
-import type { GrepRequest, SourceCreateRequest } from "nia-ai-ts";
-import {
-	OpenAPI,
-	V2ApiDataSourcesService,
-	V2ApiSourcesService,
-} from "nia-ai-ts";
+import type { SourceCreateRequest } from "nia-ai-ts";
+import { OpenAPI, V2ApiDataSourcesService, V2ApiSourcesService } from "nia-ai-ts";
 import { app } from "../app.ts";
 import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
 import { resolveBaseUrl } from "../services/config.ts";
-import { createCliSdk, createSdk } from "../services/sdk.ts";
+import {
+	createCliSdk,
+	createSdk,
+	type CliSourceGrepBody,
+	type CliSourceUpdatePayload,
+} from "../services/sdk.ts";
 import {
 	createResponseError,
 	withErrorHandling,
@@ -135,18 +136,20 @@ export function buildResolvedSourceMatchRows(
 		id?: string;
 		type?: string;
 		display_name?: string | null;
+		displayName?: string | null;
 		identifier?: string | null;
 	}>,
 ): ResolvedSourceMatchRow[] {
 	return items.map((item) => {
 		const id = item.id ?? "";
+		const displayName = item.display_name ?? item.displayName ?? null;
 
 		return {
 			id,
 			type: item.type ?? "",
 			name:
-				item.display_name && item.display_name !== item.identifier
-					? item.display_name
+				displayName && displayName !== item.identifier
+					? displayName
 					: "",
 			identifier: item.identifier ?? "",
 		};
@@ -305,9 +308,8 @@ const getCommand = app
 		const sourceType = validateSourceType(flags.type);
 
 		await withErrorHandling({ domain: "Source" }, async () => {
-			await createSdk({ apiKey: flags["api-key"] });
-
-			const result = await V2ApiSourcesService.getSourceV2SourcesSourceIdGet(
+			const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+			const result = await cliSdk.sources.get(
 				args.id,
 				sourceType,
 			);
@@ -421,24 +423,18 @@ const updateCommand = app
 		}
 
 		await withErrorHandling({ domain: "Source" }, async () => {
-			await createSdk({ apiKey: flags["api-key"] });
-
-			const requestBody: Record<string, unknown> = {};
+			const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+			const requestBody: CliSourceUpdatePayload = {
+				type: sourceType,
+			};
 			if (flags.name) {
-				requestBody.display_name = flags.name;
+				requestBody.displayName = flags.name;
 			}
 			if (flags.category) {
-				requestBody.category_id = flags.category;
+				requestBody.categoryId = flags.category;
 			}
 
-			const result =
-				await V2ApiSourcesService.updateSourceV2SourcesSourceIdPatch(
-					args.id,
-					requestBody as Parameters<
-						typeof V2ApiSourcesService.updateSourceV2SourcesSourceIdPatch
-					>[1],
-					sourceType,
-				);
+			const result = await cliSdk.sources.update(args.id, requestBody);
 
 			fmt.output(result);
 		});
@@ -468,13 +464,8 @@ const deleteCommand = app
 		const sourceType = validateSourceType(flags.type);
 
 		await withErrorHandling({ domain: "Source" }, async () => {
-			await createSdk({ apiKey: flags["api-key"] });
-
-			const result =
-				await V2ApiSourcesService.deleteSourceV2SourcesSourceIdDelete(
-					args.id,
-					sourceType,
-				);
+			const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+			const result = await cliSdk.sources.delete(args.id, sourceType);
 
 			fmt.output(result);
 		});
@@ -618,18 +609,13 @@ const readCommand = app
 		validateSourceType(flags.type);
 
 		await withErrorHandling({ domain: "Source" }, async () => {
-			await createSdk({ apiKey: flags["api-key"] });
-
-			const result =
-				await V2ApiDataSourcesService.readDocumentationFileV2V2DataSourcesSourceIdReadGet(
-					args.id,
-					args.path,
-					undefined, // page
-					undefined, // treeNodeId
-					flags["line-start"] ?? undefined,
-					flags["line-end"] ?? undefined,
-					flags["max-length"] ?? undefined,
-				);
+			const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+			const result = await cliSdk.sources.content(args.id, {
+				path: args.path,
+				lineStart: flags["line-start"] ?? undefined,
+				lineEnd: flags["line-end"] ?? undefined,
+				maxLength: flags["max-length"] ?? undefined,
+			});
 
 			fmt.output(result);
 		});
@@ -693,9 +679,8 @@ const grepCommand = app
 		validateSourceType(flags.type);
 
 		await withErrorHandling({ domain: "Source" }, async () => {
-			await createSdk({ apiKey: flags["api-key"] });
-
-			const requestBody: GrepRequest = {
+			const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+			const requestBody: CliSourceGrepBody = {
 				pattern: args.pattern,
 			};
 
@@ -703,29 +688,25 @@ const grepCommand = app
 				requestBody.path = flags.path;
 			}
 			if (flags["case-sensitive"] !== undefined) {
-				requestBody.case_sensitive = flags["case-sensitive"];
+				requestBody.caseSensitive = flags["case-sensitive"];
 			}
 			if (flags["whole-word"] !== undefined) {
-				requestBody.whole_word = flags["whole-word"];
+				requestBody.wholeWord = flags["whole-word"];
 			}
 			if (flags["lines-before"] !== undefined) {
-				requestBody.B = flags["lines-before"];
+				requestBody.linesBefore = flags["lines-before"];
 			}
 			if (flags["lines-after"] !== undefined) {
-				requestBody.A = flags["lines-after"];
+				requestBody.linesAfter = flags["lines-after"];
 			}
 			if (flags["max-per-file"] !== undefined) {
-				requestBody.max_matches_per_file = flags["max-per-file"];
+				requestBody.maxMatchesPerFile = flags["max-per-file"];
 			}
 			if (flags["max-total"] !== undefined) {
-				requestBody.max_total_matches = flags["max-total"];
+				requestBody.maxTotalMatches = flags["max-total"];
 			}
 
-			const result =
-				await V2ApiDataSourcesService.grepDocumentationV2V2DataSourcesSourceIdGrepPost(
-					args.id,
-					requestBody,
-				);
+			const result = await cliSdk.sources.grep(args.id, requestBody);
 
 			fmt.output(result);
 		});
@@ -743,6 +724,14 @@ const treeCommand = app
 		},
 	] as const)
 	.flags({
+		branch: {
+			type: "string",
+			description: "Branch or ref to inspect when supported by the backend",
+		},
+		"max-depth": {
+			type: "number",
+			description: "Maximum tree depth to return",
+		},
 		type: {
 			type: "string",
 			description:
@@ -755,16 +744,22 @@ const treeCommand = app
 		validateSourceType(flags.type);
 
 		await withErrorHandling({ domain: "Source" }, async () => {
-			await createSdk({ apiKey: flags["api-key"] });
+			const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+			const result = await cliSdk.sources.tree(args.id, {
+				branch: flags.branch,
+				maxDepth: flags["max-depth"] ?? undefined,
+			});
 
-			const result =
-				await V2ApiDataSourcesService.getDocumentationTreeV2V2DataSourcesSourceIdTreeGet(
-					args.id,
-				);
+			const treeString =
+				typeof (result as { treeString?: unknown }).treeString === "string"
+					? (result as { treeString: string }).treeString
+					: typeof (result as { tree_string?: unknown }).tree_string === "string"
+						? (result as { tree_string: string }).tree_string
+						: undefined;
 
-			// If there's a tree_string, show it directly in text mode for readability
-			if (result.tree_string) {
-				console.log(result.tree_string);
+			// If there's a tree string, show it directly in text mode for readability.
+			if (treeString) {
+				console.log(treeString);
 			} else {
 				fmt.output(result);
 			}

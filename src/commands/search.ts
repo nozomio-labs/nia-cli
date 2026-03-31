@@ -1,6 +1,10 @@
 import { annotate } from "@crustjs/skills";
 import { app } from "../app.ts";
-import { createSdk } from "../services/sdk.ts";
+import {
+	createCliSdk,
+	createSdk,
+	type CliSearchQueryPayload,
+} from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
 
@@ -24,6 +28,43 @@ export function resolveQuerySearchMode(input: {
 		return "sources";
 	}
 	return "unified";
+}
+
+function splitCsvFlag(value: string | undefined): string[] {
+	if (!value) {
+		return [];
+	}
+
+	return value
+		.split(",")
+		.map((item) => item.trim())
+		.filter((item) => item.length > 0);
+}
+
+export function buildExperimentalQuerySearchPayload(input: {
+	query: string;
+	repos?: string;
+	docs?: string;
+	localFolders?: string;
+}): CliSearchQueryPayload {
+	return {
+		mode: "query",
+		messages: [{ role: "user", content: input.query }],
+		sources: [
+			...splitCsvFlag(input.repos).map((identifier) => ({
+				identifier,
+				type: "repository" as const,
+			})),
+			...splitCsvFlag(input.docs).map((identifier) => ({
+				identifier,
+				type: "documentation" as const,
+			})),
+			...splitCsvFlag(input.localFolders).map((identifier) => ({
+				identifier,
+				type: "local_folder" as const,
+			})),
+		],
+	};
 }
 
 const universalCommand = annotate(
@@ -149,51 +190,88 @@ const queryCommand = annotate(
 			await withErrorHandling(
 				{ domain: "Search", verbose: Boolean(flags.verbose) },
 				async () => {
-				const sdk = await createSdk({ apiKey: flags["api-key"] });
+					const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
 
-				const params: Record<string, unknown> = {
-					messages: [{ role: "user", content: args.query }],
-				};
+					if (cliSdk.experimental) {
+						const payload = buildExperimentalQuerySearchPayload({
+							query: args.query,
+							repos: flags.repos,
+							docs: flags.docs,
+							localFolders: flags["local-folders"],
+						});
 
-				if (flags.repos) {
-					params.repositories = flags.repos.split(",").map((s) => s.trim());
-				}
-				if (flags.docs) {
-					params.data_sources = flags.docs.split(",").map((s) => s.trim());
-				}
-				if (flags["local-folders"]) {
-					params.local_folders = flags["local-folders"]
-						.split(",")
-						.map((s) => s.trim());
-				}
-				params.search_mode = resolveQuerySearchMode({
-					explicit: flags["search-mode"],
-					repos: flags.repos,
-					docs: flags.docs,
-					localFolders: flags["local-folders"],
-				});
-				if (flags.category) {
-					params.category = flags.category;
-				}
-				if (flags["max-tokens"] !== undefined) {
-					params.max_tokens = flags["max-tokens"];
-				}
-				if (flags.fast !== undefined) {
-					params.fast_mode = flags.fast;
-				}
-				if (flags["skip-llm"] !== undefined) {
-					params.skip_llm = flags["skip-llm"];
-				}
-				if (flags.strategy) {
-					params.reasoning_strategy = flags.strategy;
-				}
-				if (flags.model) {
-					params.model = flags.model;
-				}
+						if (payload.sources.length === 0) {
+							fmt.error(
+								"Experimental query search requires at least one of --repos, --docs, or --local-folders.",
+							);
+							process.exit(1);
+						}
 
-				const result = await sdk.search.query(params);
+						const ignoredFlags = [
+							flags["search-mode"] !== undefined ? "--search-mode" : null,
+							flags.category !== undefined ? "--category" : null,
+							flags["max-tokens"] !== undefined ? "--max-tokens" : null,
+							flags.fast !== undefined ? "--fast" : null,
+							flags["skip-llm"] !== undefined ? "--skip-llm" : null,
+							flags.strategy !== undefined ? "--strategy" : null,
+							flags.model !== undefined ? "--model" : null,
+						].filter((flag): flag is string => flag !== null);
 
-				fmt.output(result);
+						if (ignoredFlags.length > 0) {
+							fmt.warn(
+								`Ignoring legacy-only flags in experimental mode: ${ignoredFlags.join(", ")}`,
+							);
+						}
+
+						const result = await cliSdk.search.query(payload);
+						fmt.output(result);
+						return;
+					}
+
+					const sdk = await createSdk({ apiKey: flags["api-key"] });
+					const params: Record<string, unknown> = {
+						messages: [{ role: "user", content: args.query }],
+					};
+					const repositories = splitCsvFlag(flags.repos);
+					const dataSources = splitCsvFlag(flags.docs);
+					const localFolders = splitCsvFlag(flags["local-folders"]);
+					if (repositories.length > 0) {
+						params.repositories = repositories;
+					}
+					if (dataSources.length > 0) {
+						params.data_sources = dataSources;
+					}
+					if (localFolders.length > 0) {
+						params.local_folders = localFolders;
+					}
+					params.search_mode = resolveQuerySearchMode({
+						explicit: flags["search-mode"],
+						repos: flags.repos,
+						docs: flags.docs,
+						localFolders: flags["local-folders"],
+					});
+					if (flags.category) {
+						params.category = flags.category;
+					}
+					if (flags["max-tokens"] !== undefined) {
+						params.max_tokens = flags["max-tokens"];
+					}
+					if (flags.fast !== undefined) {
+						params.fast_mode = flags.fast;
+					}
+					if (flags["skip-llm"] !== undefined) {
+						params.skip_llm = flags["skip-llm"];
+					}
+					if (flags.strategy) {
+						params.reasoning_strategy = flags.strategy;
+					}
+					if (flags.model) {
+						params.model = flags.model;
+					}
+
+					const result = await sdk.search.query(params);
+
+					fmt.output(result);
 				},
 			);
 		}),

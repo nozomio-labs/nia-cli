@@ -35,6 +35,76 @@ const mockDeep = mock(() =>
 		status: "completed",
 	}),
 );
+const mockExperimentalSearchPost = mock(() =>
+	Promise.resolve({
+		data: {
+			mode: "query",
+			execution: "snippet_search",
+			query: "How does auth work?",
+			content: "Found relevant indexed matches.",
+			sources: [] as Record<string, unknown>[],
+			followUpQuestions: [] as string[],
+			readySources: [] as Record<string, unknown>[],
+			blockedSources: [] as Record<string, unknown>[],
+		},
+		error: null,
+		status: 200,
+	}),
+);
+
+mock.module("@nozomioai/nia-sdk", () => ({
+	createClient: mock(() => ({
+		usage: {
+			get: mock(() =>
+				Promise.resolve({ data: {}, error: null, status: 200 }),
+			),
+		},
+		search: {
+			post: mockExperimentalSearchPost,
+		},
+		sources: Object.assign(
+			() => ({
+				get: mock(() =>
+					Promise.resolve({ data: {}, error: null, status: 200 }),
+				),
+				patch: mock(() =>
+					Promise.resolve({ data: {}, error: null, status: 200 }),
+				),
+				delete: mock(() =>
+					Promise.resolve({ data: {}, error: null, status: 200 }),
+				),
+				tree: {
+					get: mock(() =>
+						Promise.resolve({ data: {}, error: null, status: 200 }),
+					),
+				},
+				content: {
+					get: mock(() =>
+						Promise.resolve({ data: {}, error: null, status: 200 }),
+					),
+				},
+				grep: {
+					post: mock(() =>
+						Promise.resolve({ data: {}, error: null, status: 200 }),
+					),
+				},
+			}),
+			{
+				get: mock(() =>
+					Promise.resolve({ data: { items: [] }, error: null, status: 200 }),
+				),
+				post: mock(() =>
+					Promise.resolve({ data: {}, error: null, status: 200 }),
+				),
+				resolve: {
+					get: mock(() =>
+						Promise.resolve({ data: { items: [] }, error: null, status: 200 }),
+					),
+				},
+			},
+		),
+	})),
+}));
 
 mock.module("nia-ai-ts", () => ({
 	NiaSDK: class {
@@ -74,6 +144,7 @@ describe("search commands", () => {
 		mockQuery.mockClear();
 		mockWeb.mockClear();
 		mockDeep.mockClear();
+		mockExperimentalSearchPost.mockClear();
 	});
 
 	afterEach(() => {
@@ -141,6 +212,29 @@ describe("search commands", () => {
 	});
 
 	describe("query search", () => {
+		test("builds experimental query payload from scoped flags", async () => {
+			const { buildExperimentalQuerySearchPayload } = await import(
+				"../../src/commands/search.ts"
+			);
+
+			expect(
+				buildExperimentalQuerySearchPayload({
+					query: "How does auth work?",
+					repos: "vercel/ai",
+					docs: "react-docs",
+					localFolders: "vault-1",
+				}),
+			).toEqual({
+				mode: "query",
+				messages: [{ role: "user", content: "How does auth work?" }],
+				sources: [
+					{ identifier: "vercel/ai", type: "repository" },
+					{ identifier: "react-docs", type: "documentation" },
+					{ identifier: "vault-1", type: "local_folder" },
+				],
+			});
+		});
+
 		test("calls sdk.search.query with messages array", async () => {
 			const { createSdk } = await import("../../src/services/sdk.ts");
 			const sdk = await createSdk();
@@ -236,6 +330,36 @@ describe("search commands", () => {
 				max_tokens: 2000,
 				reasoning_strategy: "hybrid",
 			});
+		});
+
+		test("executes experimental query mode with the new backend payload", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: true,
+				output: undefined,
+			});
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const originalLog = console.log;
+			const originalError = console.error;
+			console.log = (() => {}) as typeof console.log;
+			console.error = (() => {}) as typeof console.error;
+
+			try {
+				await searchCommand.execute({
+					argv: ["query", "How does auth work?", "--docs", "react-docs"],
+				});
+
+				expect(mockExperimentalSearchPost).toHaveBeenCalledWith({
+					mode: "query",
+					messages: [{ role: "user", content: "How does auth work?" }],
+					sources: [{ identifier: "react-docs", type: "documentation" }],
+				});
+			} finally {
+				console.log = originalLog;
+				console.error = originalError;
+			}
 		});
 	});
 

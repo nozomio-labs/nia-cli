@@ -82,6 +82,70 @@ const mockRenameDataSource = mock(() =>
 		new_name: "New Name",
 	}),
 );
+const mockExperimentalTreeGet = mock(() =>
+	Promise.resolve({
+		data: {
+			success: true,
+			treeString: "docs/\n└── index.md",
+		},
+		error: null,
+		status: 200,
+	}),
+);
+
+mock.module("@nozomioai/nia-sdk", () => ({
+	createClient: mock(() => ({
+		usage: {
+			get: mock(() =>
+				Promise.resolve({ data: {}, error: null, status: 200 }),
+			),
+		},
+		search: {
+			post: mock(() =>
+				Promise.resolve({ data: {}, error: null, status: 200 }),
+			),
+		},
+		sources: Object.assign(
+			() => ({
+				get: mock(() =>
+					Promise.resolve({ data: {}, error: null, status: 200 }),
+				),
+				patch: mock(() =>
+					Promise.resolve({ data: {}, error: null, status: 200 }),
+				),
+				delete: mock(() =>
+					Promise.resolve({ data: {}, error: null, status: 200 }),
+				),
+				tree: {
+					get: mockExperimentalTreeGet,
+				},
+				content: {
+					get: mock(() =>
+						Promise.resolve({ data: {}, error: null, status: 200 }),
+					),
+				},
+				grep: {
+					post: mock(() =>
+						Promise.resolve({ data: {}, error: null, status: 200 }),
+					),
+				},
+			}),
+			{
+				get: mock(() =>
+					Promise.resolve({ data: { items: [] }, error: null, status: 200 }),
+				),
+				post: mock(() =>
+					Promise.resolve({ data: {}, error: null, status: 200 }),
+				),
+				resolve: {
+					get: mock(() =>
+						Promise.resolve({ data: { items: [] }, error: null, status: 200 }),
+					),
+				},
+			},
+		),
+	})),
+}));
 
 mock.module("nia-ai-ts", () => ({
 	NiaSDK: class {
@@ -113,6 +177,7 @@ mock.module("nia-ai-ts", () => ({
 
 // --- Import after mocking ---
 
+import { sourcesCommand } from "../../src/commands/sources.ts";
 import { createSdk } from "../../src/services/sdk.ts";
 
 describe("sources content commands", () => {
@@ -133,6 +198,7 @@ describe("sources content commands", () => {
 		mockGrep.mockClear();
 		mockGetTree.mockClear();
 		mockLsDir.mockClear();
+		mockExperimentalTreeGet.mockClear();
 	});
 
 	afterEach(() => {
@@ -412,6 +478,31 @@ describe("sources content commands", () => {
 			await expect(
 				svc.getDocumentationTreeV2V2DataSourcesSourceIdTreeGet("nonexistent"),
 			).rejects.toThrow("Not Found");
+		});
+
+		test("prints experimental treeString when experimental mode is enabled", async () => {
+			await writeConfig({
+				apiKey: "nia_test_sources_content_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: true,
+				output: undefined,
+			});
+
+			const originalLog = console.log;
+			const originalError = console.error;
+			console.log = (() => {}) as typeof console.log;
+			console.error = (() => {}) as typeof console.error;
+
+			try {
+				await sourcesCommand.execute({
+					argv: ["tree", "src-123"],
+				});
+
+				expect(mockExperimentalTreeGet).toHaveBeenCalledTimes(1);
+			} finally {
+				console.log = originalLog;
+				console.error = originalError;
+			}
 		});
 	});
 
