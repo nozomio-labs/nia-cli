@@ -1,5 +1,28 @@
 # nia-cli
 
+## 0.0.14
+
+### Patch Changes
+
+- d328230: Add runtime experimental mode override system
+
+  - Add `--experimental` flag support for single command invocations without persisting to config
+  - Root-level usage with `--experimental` persists the preference to config
+  - Subcommands use runtime override only for the active invocation
+  - Add comprehensive tests for runtime override behavior
+
+- 23fda20: Fix source registration and search formatting issues
+
+  - Improve SDK source registration and status checking
+  - Fix output formatting for search results display
+  - Add comprehensive tests for source and search commands
+
+- 62f10f8: Improve CLI error verbosity for debugging
+
+  - Preserve structured HTTP error details so verbose mode can print response bodies and causes
+  - Surface underlying backend messages more clearly in shared CLI error output
+  - Wire inherited `--verbose` handling through command error wrappers and cover the behavior with tests
+
 ## 0.0.13
 
 ### Patch Changes
