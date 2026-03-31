@@ -160,6 +160,20 @@ describe("error handling", () => {
 			).toBe(true);
 		});
 
+		test("shows underlying server detail when available", () => {
+			const error = createApiError(500, "Internal Server Error", {
+				message: "Database unavailable",
+			});
+			try {
+				handleError(error);
+			} catch {}
+			expect(
+				consoleErrorOutput.some((s) =>
+					s.includes("Server error (500): Database unavailable"),
+				),
+			).toBe(true);
+		});
+
 		test("handles 502 server error", () => {
 			const error = createApiError(502, "Bad Gateway");
 			try {
@@ -317,6 +331,22 @@ describe("error handling", () => {
 			).toBe(true);
 		});
 
+		test("uses attached body details for status errors", () => {
+			const error = Object.assign(new Error("Bad Request"), {
+				status: 400,
+				body: { detail: "Unsupported experimental flag" },
+			});
+			try {
+				handleError(error, { domain: "Search" });
+			} catch {}
+			expect(consoleErrorOutput.some((s) => s.includes("Bad request"))).toBe(
+				true,
+			);
+			expect(
+				consoleErrorOutput.some((s) => s.includes("Unsupported experimental flag")),
+			).toBe(true);
+		});
+
 		test("handles non-Error thrown value (string)", () => {
 			try {
 				handleError("unexpected string error");
@@ -346,6 +376,35 @@ describe("error handling", () => {
 				handleError(error, { verbose: true });
 			} catch {}
 			expect(consoleErrorOutput.some((s) => s.includes("Stack trace"))).toBe(
+				true,
+			);
+		});
+
+		test("shows response body in verbose mode for status errors", () => {
+			const error = Object.assign(new Error("Bad Request"), {
+				status: 400,
+				body: { detail: "Unsupported experimental flag" },
+			});
+			try {
+				handleError(error, { verbose: true, domain: "Search" });
+			} catch {}
+			expect(consoleErrorOutput.some((s) => s.includes("Response body"))).toBe(
+				true,
+			);
+			expect(
+				consoleErrorOutput.some((s) => s.includes("Unsupported experimental flag")),
+			).toBe(true);
+		});
+
+		test("shows cause in verbose mode for generic Error", () => {
+			const error = Object.assign(new Error("outer failure"), {
+				cause: new Error("inner failure"),
+			});
+			try {
+				handleError(error, { verbose: true });
+			} catch {}
+			expect(consoleErrorOutput.some((s) => s.includes("Cause"))).toBe(true);
+			expect(consoleErrorOutput.some((s) => s.includes("inner failure"))).toBe(
 				true,
 			);
 		});
@@ -439,6 +498,18 @@ describe("withErrorHandling", () => {
 		} catch {}
 		expect(consoleErrorOutput.some((s) => s.includes("Stack trace"))).toBe(
 			false,
+		);
+	});
+
+	test("uses --verbose from argv when options omit verbose", async () => {
+		process.argv = ["bun", "nia", "--verbose", "search", "universal", "test"];
+		try {
+			await withErrorHandling({ domain: "Search" }, async () => {
+				throw new Error("API call failed");
+			});
+		} catch {}
+		expect(consoleErrorOutput.some((s) => s.includes("Stack trace"))).toBe(
+			true,
 		);
 	});
 

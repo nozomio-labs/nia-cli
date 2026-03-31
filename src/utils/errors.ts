@@ -19,6 +19,12 @@ export interface ErrorHandlerOptions {
 	domain?: string;
 }
 
+type StatusError = Error & {
+	status?: number;
+	body?: unknown;
+	cause?: unknown;
+};
+
 /**
  * Format a user-friendly error message for the given error and print it.
  * Delegates `CrustError` formatting to Crust; otherwise exits with code 1.
@@ -60,18 +66,22 @@ export function handleError(
 	}
 
 	if (error instanceof Error) {
-		const statusError = error as Error & { status?: number };
+		const statusError = error as StatusError;
 		if (typeof statusError.status === "number") {
 			return handleStatusCode(
 				statusError.status,
 				statusError.message,
 				verbose,
 				domain,
+				statusError.body,
+				statusError.stack,
+				statusError.cause,
 			);
 		}
 
 		const label = domain ? `${domain} failed` : "Error";
 		console.error(`${label}: ${error.message}`);
+		printCauseIfVerbose(verbose, statusError.cause);
 		printStackIfVerbose(verbose, error.stack);
 		exitWithError();
 	}
@@ -91,46 +101,59 @@ function handleStatusCode(
 	domain?: string,
 	body?: unknown,
 	stack?: string,
+	cause?: unknown,
 ): never {
+	const detailMessage = extractDetailMessage(body) ?? message;
+	let primaryMessage: string;
+
 	switch (true) {
 		case status === 401 || status === 403:
-			console.error(
-				"Authentication failed — run `nia auth login` to authenticate.",
-			);
+			primaryMessage =
+				"Authentication failed — run `nia auth login` to authenticate.";
 			break;
 
 		case status === 404: {
 			const label = domain ? `${domain} resource` : "Resource";
-			console.error(
-				`${label} not found. Check the ID or identifier and try again.`,
-			);
+			primaryMessage = `${label} not found. Check the ID or identifier and try again.`;
 			break;
 		}
 
+		case status === 400:
+			primaryMessage = `Bad request: ${detailMessage}`;
+			break;
+
+		case status === 409:
+			primaryMessage = `Conflict: ${detailMessage}`;
+			break;
+
 		case status === 422:
-			console.error(
-				`Validation error: ${extractDetailMessage(body) ?? message}`,
-			);
+			primaryMessage = `Validation error: ${detailMessage}`;
 			break;
 
 		case status === 429:
-			console.error("Rate limited — try again in a moment.");
+			primaryMessage = "Rate limited — try again in a moment.";
 			break;
 
 		case status >= 500:
-			console.error(`Server error (${status}) — try again later.`);
+			primaryMessage = isMeaningfulDetail(status, detailMessage)
+				? `Server error (${status}): ${detailMessage}`
+				: `Server error (${status}) — try again later.`;
 			break;
 
 		default: {
 			const label = domain ? `${domain} failed` : "Request failed";
-			console.error(`${label} (${status}): ${message}`);
+			primaryMessage = `${label} (${status}): ${detailMessage}`;
 		}
 	}
+
+	console.error(primaryMessage);
+	printStatusDetailIfUseful(status, detailMessage, primaryMessage);
 
 	if (verbose) {
 		if (body !== undefined) {
 			console.error(`\nResponse body:\n${formatBody(body)}`);
 		}
+		printCauseIfVerbose(verbose, cause);
 		printStackIfVerbose(verbose, stack);
 	}
 
@@ -144,6 +167,18 @@ function printStackIfVerbose(
 	if (verbose && stack) {
 		console.error(`\nStack trace:\n${stack}`);
 	}
+}
+
+function printCauseIfVerbose(verbose: boolean, cause: unknown): void {
+	if (!verbose || cause === undefined) {
+		return;
+	}
+
+	const renderedCause =
+		cause instanceof Error
+			? cause.stack ?? cause.message
+			: formatBody(cause);
+	console.error(`\nCause:\n${renderedCause}`);
 }
 
 function exitWithError(): never {
@@ -194,6 +229,30 @@ function extractDetailMessage(body: unknown): string | undefined {
 	return undefined;
 }
 
+function isMeaningfulDetail(status: number, detail: string | undefined): boolean {
+	if (!detail) {
+		return false;
+	}
+
+	return detail !== `Request failed with status ${status}`;
+}
+
+function printStatusDetailIfUseful(
+	status: number,
+	detail: string | undefined,
+	primaryMessage: string,
+): void {
+	if (
+		!detail ||
+		primaryMessage.includes(detail) ||
+		!isMeaningfulDetail(status, detail)
+	) {
+		return;
+	}
+
+	console.error(`Details: ${detail}`);
+}
+
 /**
  * Format a response body for verbose output.
  */
@@ -203,6 +262,33 @@ function formatBody(body: unknown): string {
 		return JSON.stringify(body, null, 2);
 	} catch {
 		return String(body);
+	}
+}
+
+export async function createResponseError(
+	response: Response,
+	fallbackMessage: string,
+): Promise<StatusError> {
+	const body = await readResponseBody(response);
+	const detailMessage = extractDetailMessage(body);
+	const error = new Error(
+		detailMessage ?? `${fallbackMessage} (status ${response.status})`,
+	) as StatusError;
+	error.status = response.status;
+	error.body = body;
+	return error;
+}
+
+async function readResponseBody(response: Response): Promise<unknown> {
+	const text = await response.text();
+	if (!text) {
+		return undefined;
+	}
+
+	try {
+		return JSON.parse(text);
+	} catch {
+		return text;
 	}
 }
 
@@ -225,9 +311,14 @@ export async function withErrorHandling(
 	options: ErrorHandlerOptions,
 	fn: () => Promise<void>,
 ): Promise<void> {
+	const resolvedOptions = {
+		...options,
+		verbose: options.verbose ?? process.argv.includes("--verbose"),
+	};
+
 	try {
 		await fn();
 	} catch (error) {
-		handleError(error, options);
+		handleError(error, resolvedOptions);
 	}
 }

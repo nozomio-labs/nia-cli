@@ -344,6 +344,7 @@ describe("cli sdk adapter", () => {
 		await expect(sdk.usage.getSummary()).rejects.toMatchObject({
 			message: "Unauthorized",
 			status: 401,
+			body: { message: "Unauthorized" },
 		});
 	});
 

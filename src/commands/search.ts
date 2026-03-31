@@ -55,7 +55,9 @@ const universalCommand = annotate(
 		.run(async ({ args, flags }) => {
 			const fmt = createOutput({ color: flags.color });
 
-			await withErrorHandling({ domain: "Search" }, async () => {
+			await withErrorHandling(
+				{ domain: "Search", verbose: Boolean(flags.verbose) },
+				async () => {
 				const sdk = await createSdk({ apiKey: flags["api-key"] });
 
 				const params: Record<string, unknown> = {
@@ -75,7 +77,8 @@ const universalCommand = annotate(
 				const result = await sdk.search.universal(params);
 
 				fmt.output(result);
-			});
+				},
+			);
 		}),
 	[
 		"Hybrid vector + BM25 search across all indexed public sources (repos, docs, HF datasets).",
@@ -143,7 +146,9 @@ const queryCommand = annotate(
 		.run(async ({ args, flags }) => {
 			const fmt = createOutput({ color: flags.color });
 
-			await withErrorHandling({ domain: "Search" }, async () => {
+			await withErrorHandling(
+				{ domain: "Search", verbose: Boolean(flags.verbose) },
+				async () => {
 				const sdk = await createSdk({ apiKey: flags["api-key"] });
 
 				const params: Record<string, unknown> = {
@@ -189,7 +194,8 @@ const queryCommand = annotate(
 				const result = await sdk.search.query(params);
 
 				fmt.output(result);
-			});
+				},
+			);
 		}),
 	[
 		"Targeted search with AI response and sources. Pass repos, docs, and local folders as comma-separated strings.",
@@ -254,7 +260,9 @@ const webCommand = annotate(
 				process.exit(1);
 			}
 
-			await withErrorHandling({ domain: "Search" }, async () => {
+			await withErrorHandling(
+				{ domain: "Search", verbose: Boolean(flags.verbose) },
+				async () => {
 				const sdk = await createSdk({ apiKey: flags["api-key"] });
 
 				const params: Record<string, unknown> = {
@@ -274,7 +282,8 @@ const webCommand = annotate(
 				const result = await sdk.search.web(params);
 
 				fmt.output(result);
-			});
+				},
+			);
 		}),
 	[
 		"Only use when the source is completely unknown and not indexed in Nia.",
@@ -308,7 +317,9 @@ const deepCommand = annotate(
 		.run(async ({ args, flags }) => {
 			const fmt = createOutput({ color: flags.color });
 
-			await withErrorHandling({ domain: "Search" }, async () => {
+			await withErrorHandling(
+				{ domain: "Search", verbose: Boolean(flags.verbose) },
+				async () => {
 				const sdk = await createSdk({ apiKey: flags["api-key"] });
 
 				const params: Record<string, unknown> = {
@@ -328,7 +339,8 @@ const deepCommand = annotate(
 				const result = await sdk.search.deep(params);
 
 				fmt.output(result);
-			});
+				},
+			);
 		}),
 	[
 		"Requires Pro plan. Use for complex research questions needing multi-step investigation.",

@@ -12,7 +12,10 @@ import { app } from "../app.ts";
 import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
 import { resolveBaseUrl } from "../services/config.ts";
 import { createCliSdk, createSdk } from "../services/sdk.ts";
-import { withErrorHandling } from "../utils/errors.ts";
+import {
+	createResponseError,
+	withErrorHandling,
+} from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
 
 /**
@@ -853,10 +856,7 @@ const subscribeCommand = annotate(
 				});
 
 				if (!response.ok) {
-					const errorText = await response.text();
-					throw new Error(
-						`Subscribe failed with status ${response.status}: ${errorText}`,
-					);
+					throw await createResponseError(response, "Subscribe failed");
 				}
 
 				const result = (await response.json()) as Record<string, unknown>;
@@ -945,10 +945,7 @@ const writeCommand = app
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(
-					`Write failed with status ${response.status}: ${errorText}`,
-				);
+				throw await createResponseError(response, "Write failed");
 			}
 
 			const result = (await response.json()) as Record<string, unknown>;
@@ -1000,10 +997,7 @@ const mvCommand = app
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(
-					`Move failed with status ${response.status}: ${errorText}`,
-				);
+				throw await createResponseError(response, "Move failed");
 			}
 
 			const result = (await response.json()) as Record<string, unknown>;
@@ -1046,10 +1040,7 @@ const mkdirCommand = app
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(
-					`Mkdir failed with status ${response.status}: ${errorText}`,
-				);
+				throw await createResponseError(response, "Create directory failed");
 			}
 
 			const result = (await response.json()) as Record<string, unknown>;
@@ -1093,10 +1084,7 @@ const rmCommand = app
 			);
 
 			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(
-					`Delete failed with status ${response.status}: ${errorText}`,
-				);
+				throw await createResponseError(response, "Delete failed");
 			}
 
 			const result = (await response.json()) as Record<string, unknown>;
@@ -1123,10 +1111,7 @@ const summaryCommand = app
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(
-					`Summary failed with status ${response.status}: ${errorText}`,
-				);
+				throw await createResponseError(response, "Summary failed");
 			}
 
 			const result = (await response.json()) as Record<string, unknown>;
@@ -1185,9 +1170,9 @@ const uploadCommand = app
 			});
 
 			if (!uploadUrlResponse.ok) {
-				const errorText = await uploadUrlResponse.text();
-				throw new Error(
-					`Failed to get upload URL (status ${uploadUrlResponse.status}): ${errorText}`,
+				throw await createResponseError(
+					uploadUrlResponse,
+					"Failed to get upload URL",
 				);
 			}
 
@@ -1207,10 +1192,7 @@ const uploadCommand = app
 			});
 
 			if (!uploadResponse.ok) {
-				const errorText = await uploadResponse.text();
-				throw new Error(
-					`File upload failed (status ${uploadResponse.status}): ${errorText}`,
-				);
+				throw await createResponseError(uploadResponse, "File upload failed");
 			}
 
 			// Step 3: Create the source with the GCS path
@@ -1231,10 +1213,7 @@ const uploadCommand = app
 			});
 
 			if (!createResponse.ok) {
-				const errorText = await createResponse.text();
-				throw new Error(
-					`Source creation failed (status ${createResponse.status}): ${errorText}`,
-				);
+				throw await createResponseError(createResponse, "Source creation failed");
 			}
 
 			const result = (await createResponse.json()) as Record<string, unknown>;
