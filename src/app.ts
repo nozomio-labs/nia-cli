@@ -1,4 +1,4 @@
-import { Crust, type CommandNode } from "@crustjs/core";
+import { type CommandNode, Crust } from "@crustjs/core";
 import { renderHelp } from "@crustjs/plugins";
 import pkg from "../package.json";
 import { APP_NAME, persistExperimentalPreference } from "./services/config.ts";

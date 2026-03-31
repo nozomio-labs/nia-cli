@@ -55,9 +55,7 @@ const mockExperimentalSearchPost = mock(() =>
 mock.module("@nozomioai/nia-sdk", () => ({
 	createClient: mock(() => ({
 		usage: {
-			get: mock(() =>
-				Promise.resolve({ data: {}, error: null, status: 200 }),
-			),
+			get: mock(() => Promise.resolve({ data: {}, error: null, status: 200 })),
 		},
 		search: {
 			post: mockExperimentalSearchPost,

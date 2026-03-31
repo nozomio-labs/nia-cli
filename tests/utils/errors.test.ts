@@ -343,7 +343,9 @@ describe("error handling", () => {
 				true,
 			);
 			expect(
-				consoleErrorOutput.some((s) => s.includes("Unsupported experimental flag")),
+				consoleErrorOutput.some((s) =>
+					s.includes("Unsupported experimental flag"),
+				),
 			).toBe(true);
 		});
 
@@ -392,7 +394,9 @@ describe("error handling", () => {
 				true,
 			);
 			expect(
-				consoleErrorOutput.some((s) => s.includes("Unsupported experimental flag")),
+				consoleErrorOutput.some((s) =>
+					s.includes("Unsupported experimental flag"),
+				),
 			).toBe(true);
 		});
 

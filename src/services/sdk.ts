@@ -75,6 +75,7 @@ export interface CliSourceGrepBody {
 }
 
 export interface CliSearchQueryPayload {
+	[key: string]: unknown;
 	mode: "query";
 	messages: Array<{
 		role: SearchMessageRole;
@@ -164,7 +165,8 @@ export async function createCliSdk(
 	const legacyGetSource = async (
 		id: string,
 		type?: SourceType,
-	): Promise<unknown> => V2ApiSourcesService.getSourceV2SourcesSourceIdGet(id, type);
+	): Promise<unknown> =>
+		V2ApiSourcesService.getSourceV2SourcesSourceIdGet(id, type);
 	const legacyUpdateSource = async (
 		id: string,
 		payload: CliSourceUpdatePayload,
@@ -279,10 +281,12 @@ export async function createCliSdk(
 					return legacySdk.sources.create(payload);
 				}
 
-				return withExperimentalFallback(
+				return withExperimentalFallback<unknown>(
 					async () =>
 						unwrapExperimentalResponse(
-							await client.sources.post(toExperimentalCreateSourceBody(payload)),
+							await client.sources.post(
+								toExperimentalCreateSourceBody(payload),
+							),
 						),
 					() => legacySdk.sources.create(payload),
 				);
@@ -292,7 +296,7 @@ export async function createCliSdk(
 					return legacySdk.sources.list(params);
 				}
 
-				return withExperimentalFallback(
+				return withExperimentalFallback<unknown>(
 					async () =>
 						unwrapExperimentalResponse(
 							await client.sources.get({
@@ -309,7 +313,7 @@ export async function createCliSdk(
 				);
 			},
 			async resolve(identifier, type) {
-				return withExperimentalFallback(
+				return withExperimentalFallback<unknown>(
 					async () =>
 						unwrapExperimentalResponse(
 							await client.sources.resolve.get({
@@ -334,9 +338,9 @@ export async function createCliSdk(
 				return withExperimentalFallback(
 					async () =>
 						unwrapExperimentalResponse(
-							await client.sources({ id }).patch(
-								toExperimentalUpdateSourceBody(payload),
-							),
+							await client
+								.sources({ id })
+								.patch(toExperimentalUpdateSourceBody(payload)),
 						),
 					() => legacyUpdateSource(id, payload),
 				);
@@ -437,8 +441,8 @@ async function resolveClientContext(
 		baseUrl,
 		experimental: options.baseUrl
 			? options.baseUrl === EXPERIMENTAL_BASE_URL
-			: getExperimentalOverride() ??
-				(config.useExperimentalApi || baseUrl === EXPERIMENTAL_BASE_URL),
+			: (getExperimentalOverride() ??
+				(config.useExperimentalApi || baseUrl === EXPERIMENTAL_BASE_URL)),
 	};
 }
 
@@ -673,9 +677,9 @@ function requiresLegacyExperimentalSourceUpdate(
 	return payload.categoryId !== undefined;
 }
 
-function toExperimentalUpdateSourceBody(
-	payload: CliSourceUpdatePayload,
-): { displayName?: string | null } {
+function toExperimentalUpdateSourceBody(payload: CliSourceUpdatePayload): {
+	displayName?: string | null;
+} {
 	const body: { displayName?: string | null } = {};
 	if (payload.displayName !== undefined) {
 		body.displayName = payload.displayName;
@@ -742,7 +746,7 @@ function toLegacySearchQueryPayload(
 	const localFolders: string[] = [];
 
 	for (const source of payload.sources) {
-		if (!isRecord(source) || typeof source.identifier !== "string") {
+		if (!("identifier" in source)) {
 			continue;
 		}
 		switch (source.type) {
@@ -784,7 +788,8 @@ function inferLegacySearchMode(input: {
 	localFolders: string[];
 }): string {
 	const hasRepos = input.repositories.length > 0;
-	const hasSources = input.dataSources.length > 0 || input.localFolders.length > 0;
+	const hasSources =
+		input.dataSources.length > 0 || input.localFolders.length > 0;
 
 	if (hasRepos && !hasSources) {
 		return "repositories";
@@ -822,7 +827,9 @@ function toOptionalBoolean(value: unknown): boolean | undefined {
 }
 
 function toOptionalNumber(value: unknown): number | undefined {
-	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+	return typeof value === "number" && Number.isFinite(value)
+		? value
+		: undefined;
 }
 
 function toOptionalStringArray(value: unknown): string[] | undefined {

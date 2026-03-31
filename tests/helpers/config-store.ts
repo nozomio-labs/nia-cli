@@ -1,7 +1,7 @@
 import {
 	configStore,
-	getExperimentalOverride,
 	getConfigDirPath,
+	getExperimentalOverride,
 	maskApiKey,
 	type NiaConfig,
 	persistExperimentalPreference,
@@ -12,11 +12,11 @@ import {
 
 export {
 	getConfigDirPath,
+	getExperimentalOverride,
 	maskApiKey,
 	persistExperimentalPreference,
 	resolveApiKey,
 	resolveBaseUrl,
-	getExperimentalOverride,
 	setExperimentalOverride,
 };
 

@@ -1,9 +1,9 @@
 import { annotate } from "@crustjs/skills";
 import { app } from "../app.ts";
 import {
+	type CliSearchQueryPayload,
 	createCliSdk,
 	createSdk,
-	type CliSearchQueryPayload,
 } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
@@ -99,25 +99,25 @@ const universalCommand = annotate(
 			await withErrorHandling(
 				{ domain: "Search", verbose: Boolean(flags.verbose) },
 				async () => {
-				const sdk = await createSdk({ apiKey: flags["api-key"] });
+					const sdk = await createSdk({ apiKey: flags["api-key"] });
 
-				const params: Record<string, unknown> = {
-					query: args.query,
-				};
+					const params: Record<string, unknown> = {
+						query: args.query,
+					};
 
-				if (flags["top-k"] !== undefined) {
-					params.top_k = flags["top-k"];
-				}
-				if (flags["include-repos"] !== undefined) {
-					params.include_repos = flags["include-repos"];
-				}
-				if (flags["include-docs"] !== undefined) {
-					params.include_docs = flags["include-docs"];
-				}
+					if (flags["top-k"] !== undefined) {
+						params.top_k = flags["top-k"];
+					}
+					if (flags["include-repos"] !== undefined) {
+						params.include_repos = flags["include-repos"];
+					}
+					if (flags["include-docs"] !== undefined) {
+						params.include_docs = flags["include-docs"];
+					}
 
-				const result = await sdk.search.universal(params);
+					const result = await sdk.search.universal(params);
 
-				fmt.output(result);
+					fmt.output(result);
 				},
 			);
 		}),
@@ -341,25 +341,25 @@ const webCommand = annotate(
 			await withErrorHandling(
 				{ domain: "Search", verbose: Boolean(flags.verbose) },
 				async () => {
-				const sdk = await createSdk({ apiKey: flags["api-key"] });
+					const sdk = await createSdk({ apiKey: flags["api-key"] });
 
-				const params: Record<string, unknown> = {
-					query: args.query,
-				};
+					const params: Record<string, unknown> = {
+						query: args.query,
+					};
 
-				if (flags["num-results"] !== undefined) {
-					params.num_results = flags["num-results"];
-				}
-				if (flags.category) {
-					params.category = flags.category;
-				}
-				if (flags["days-back"] !== undefined) {
-					params.days_back = flags["days-back"];
-				}
+					if (flags["num-results"] !== undefined) {
+						params.num_results = flags["num-results"];
+					}
+					if (flags.category) {
+						params.category = flags.category;
+					}
+					if (flags["days-back"] !== undefined) {
+						params.days_back = flags["days-back"];
+					}
 
-				const result = await sdk.search.web(params);
+					const result = await sdk.search.web(params);
 
-				fmt.output(result);
+					fmt.output(result);
 				},
 			);
 		}),
@@ -398,25 +398,25 @@ const deepCommand = annotate(
 			await withErrorHandling(
 				{ domain: "Search", verbose: Boolean(flags.verbose) },
 				async () => {
-				const sdk = await createSdk({ apiKey: flags["api-key"] });
+					const sdk = await createSdk({ apiKey: flags["api-key"] });
 
-				const params: Record<string, unknown> = {
-					query: args.query,
-				};
+					const params: Record<string, unknown> = {
+						query: args.query,
+					};
 
-				if (flags["output-format"]) {
-					params.output_format = flags["output-format"];
-				}
-				if (flags.model) {
-					params.model = flags.model;
-				}
-				if (flags.verbose) {
-					params.verbose = true;
-				}
+					if (flags["output-format"]) {
+						params.output_format = flags["output-format"];
+					}
+					if (flags.model) {
+						params.model = flags.model;
+					}
+					if (flags.verbose) {
+						params.verbose = true;
+					}
 
-				const result = await sdk.search.deep(params);
+					const result = await sdk.search.deep(params);
 
-				fmt.output(result);
+					fmt.output(result);
 				},
 			);
 		}),

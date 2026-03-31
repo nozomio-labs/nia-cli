@@ -3,20 +3,21 @@ import path from "node:path";
 import { input } from "@crustjs/prompts";
 import { annotate } from "@crustjs/skills";
 import type { SourceCreateRequest } from "nia-ai-ts";
-import { OpenAPI, V2ApiDataSourcesService, V2ApiSourcesService } from "nia-ai-ts";
+import {
+	OpenAPI,
+	V2ApiDataSourcesService,
+	V2ApiSourcesService,
+} from "nia-ai-ts";
 import { app } from "../app.ts";
 import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
 import { resolveBaseUrl } from "../services/config.ts";
 import {
-	createCliSdk,
-	createSdk,
 	type CliSourceGrepBody,
 	type CliSourceUpdatePayload,
+	createCliSdk,
+	createSdk,
 } from "../services/sdk.ts";
-import {
-	createResponseError,
-	withErrorHandling,
-} from "../utils/errors.ts";
+import { createResponseError, withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
 
 /**
@@ -147,10 +148,7 @@ export function buildResolvedSourceMatchRows(
 		return {
 			id,
 			type: item.type ?? "",
-			name:
-				displayName && displayName !== item.identifier
-					? displayName
-					: "",
+			name: displayName && displayName !== item.identifier ? displayName : "",
 			identifier: item.identifier ?? "",
 		};
 	});
@@ -309,10 +307,7 @@ const getCommand = app
 
 		await withErrorHandling({ domain: "Source" }, async () => {
 			const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
-			const result = await cliSdk.sources.get(
-				args.id,
-				sourceType,
-			);
+			const result = await cliSdk.sources.get(args.id, sourceType);
 
 			fmt.output(result);
 		});
@@ -753,7 +748,8 @@ const treeCommand = app
 			const treeString =
 				typeof (result as { treeString?: unknown }).treeString === "string"
 					? (result as { treeString: string }).treeString
-					: typeof (result as { tree_string?: unknown }).tree_string === "string"
+					: typeof (result as { tree_string?: unknown }).tree_string ===
+							"string"
 						? (result as { tree_string: string }).tree_string
 						: undefined;
 
@@ -1208,7 +1204,10 @@ const uploadCommand = app
 			});
 
 			if (!createResponse.ok) {
-				throw await createResponseError(createResponse, "Source creation failed");
+				throw await createResponseError(
+					createResponse,
+					"Source creation failed",
+				);
 			}
 
 			const result = (await createResponse.json()) as Record<string, unknown>;

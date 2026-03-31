@@ -10,8 +10,8 @@ const mockExperimentalUsageGet = mock(() =>
 			usage: {
 				queries: { used: 1, remaining: 9, limit: 10 },
 			},
-		},
-		error: null,
+		} as Record<string, unknown> | null,
+		error: null as Record<string, unknown> | null,
 		status: 200,
 	}),
 );
@@ -74,8 +74,8 @@ const mockExperimentalSourcesResolveGet = mock(() =>
 					status: "completed",
 				},
 			],
-		},
-		error: null,
+		} as Record<string, unknown> | null,
+		error: null as Record<string, unknown> | null,
 		status: 200,
 	}),
 );
@@ -173,8 +173,8 @@ const mockExperimentalSearchPost = mock((body: Record<string, unknown>) =>
 			followUpQuestions: [],
 			readySources: [],
 			blockedSources: [],
-		},
-		error: null,
+		} as Record<string, unknown> | null,
+		error: null as Record<string, unknown> | null,
 		status: 200,
 	}),
 );
@@ -437,7 +437,10 @@ describe("cli sdk adapter", () => {
 			displayName: "Renamed",
 		});
 		const deleted = await sdk.sources.delete("src_1");
-		const tree = await sdk.sources.tree("src_1", { branch: "main", maxDepth: 2 });
+		const tree = await sdk.sources.tree("src_1", {
+			branch: "main",
+			maxDepth: 2,
+		});
 		const content = await sdk.sources.content("src_1", {
 			path: "docs/index.md",
 			lineStart: 1,
@@ -498,7 +501,10 @@ describe("cli sdk adapter", () => {
 		expect(tree).toMatchObject({ treeString: "docs/\n└── index.md" });
 		expect(content).toMatchObject({ content: "# Hello" });
 		expect(grep).toMatchObject({ pattern: "hello" });
-		expect(search).toMatchObject({ mode: "query", execution: "snippet_search" });
+		expect(search).toMatchObject({
+			mode: "query",
+			execution: "snippet_search",
+		});
 	});
 
 	test("falls back to the legacy sdk when experimental mode is disabled", async () => {

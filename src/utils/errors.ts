@@ -175,9 +175,7 @@ function printCauseIfVerbose(verbose: boolean, cause: unknown): void {
 	}
 
 	const renderedCause =
-		cause instanceof Error
-			? cause.stack ?? cause.message
-			: formatBody(cause);
+		cause instanceof Error ? (cause.stack ?? cause.message) : formatBody(cause);
 	console.error(`\nCause:\n${renderedCause}`);
 }
 
@@ -229,7 +227,10 @@ function extractDetailMessage(body: unknown): string | undefined {
 	return undefined;
 }
 
-function isMeaningfulDetail(status: number, detail: string | undefined): boolean {
+function isMeaningfulDetail(
+	status: number,
+	detail: string | undefined,
+): boolean {
 	if (!detail) {
 		return false;
 	}

@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { experimentalModePlugin } from "../../src/plugins/experimental.ts";
-import { DEFAULT_BASE_URL, EXPERIMENTAL_BASE_URL } from "../../src/services/config.ts";
+import {
+	DEFAULT_BASE_URL,
+	EXPERIMENTAL_BASE_URL,
+} from "../../src/services/config.ts";
 import {
 	getConfigDirPath,
 	readConfig,

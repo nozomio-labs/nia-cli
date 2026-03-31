@@ -96,14 +96,10 @@ const mockExperimentalTreeGet = mock(() =>
 mock.module("@nozomioai/nia-sdk", () => ({
 	createClient: mock(() => ({
 		usage: {
-			get: mock(() =>
-				Promise.resolve({ data: {}, error: null, status: 200 }),
-			),
+			get: mock(() => Promise.resolve({ data: {}, error: null, status: 200 })),
 		},
 		search: {
-			post: mock(() =>
-				Promise.resolve({ data: {}, error: null, status: 200 }),
-			),
+			post: mock(() => Promise.resolve({ data: {}, error: null, status: 200 })),
 		},
 		sources: Object.assign(
 			() => ({
