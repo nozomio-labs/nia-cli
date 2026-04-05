@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.0.15
+
+### Patch Changes
+
+- ed26230: add sandbox agentic search
+
 ## 0.0.14
 
 ### Patch Changes
