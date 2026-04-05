@@ -4,6 +4,18 @@ export const APP_NAME = "nia";
 export const DEFAULT_BASE_URL = "https://apigcp.trynia.ai/v2";
 export const EXPERIMENTAL_BASE_URL = "https://api.trynia.ai";
 
+/**
+ * Eden base URL for `POST /sandbox/search` and related routes.
+ * Override with `NIA_SANDBOX_BASE_URL` when using a dev/staging API that serves sandbox (production may not expose it yet).
+ */
+export function resolveSandboxBaseUrl(): string {
+	const raw = process.env.NIA_SANDBOX_BASE_URL;
+	if (typeof raw === "string" && raw.trim().length > 0) {
+		return raw.replace(/\/$/, "");
+	}
+	return EXPERIMENTAL_BASE_URL;
+}
+
 let experimentalOverride: boolean | undefined;
 
 export const configStore = createStore({

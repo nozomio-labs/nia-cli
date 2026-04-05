@@ -1,12 +1,14 @@
 import { annotate } from "@crustjs/skills";
 import { app } from "../app.ts";
 import {
+	type CliSandboxSearchSseEnvelope,
 	type CliSearchQueryPayload,
 	createCliSdk,
 	createSdk,
 } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
+import { renderSandboxSearchStreamEvent } from "../utils/streaming.ts";
 
 export function resolveQuerySearchMode(input: {
 	explicit?: string;
@@ -39,6 +41,158 @@ function splitCsvFlag(value: string | undefined): string[] {
 		.split(",")
 		.map((item) => item.trim())
 		.filter((item) => item.length > 0);
+}
+
+function sanitizeSandboxFinalPayloadForTTY(
+	payload: Record<string, unknown>,
+	options: { verbose?: boolean } = {},
+): unknown {
+	const result =
+		typeof payload.result === "object" && payload.result !== null
+			? { ...(payload.result as Record<string, unknown>) }
+			: null;
+
+	if (!result) {
+		return payload;
+	}
+
+	const cleanedAnswerFromAnswer = extractSandboxAnswerFromTranscript(
+		result.answer,
+	);
+	const cleanedAnswerFromRawOutput = extractSandboxAnswerFromTranscript(
+		result.rawOutput,
+	);
+
+	delete result.rawOutput;
+
+	if (cleanedAnswerFromAnswer) {
+		result.answer = cleanedAnswerFromAnswer;
+	} else if (
+		typeof result.answer !== "string" ||
+		result.answer.trim().length === 0
+	) {
+		if (cleanedAnswerFromRawOutput) {
+			result.answer = cleanedAnswerFromRawOutput;
+		}
+	} else if (
+		typeof result.answer === "string" &&
+		looksLikeSandboxTranscript(result.answer)
+	) {
+		if (cleanedAnswerFromRawOutput) {
+			result.answer = cleanedAnswerFromRawOutput;
+		} else {
+			delete result.answer;
+		}
+	}
+
+	const sanitizedPayload = {
+		...payload,
+		result,
+	};
+
+	if (options.verbose) {
+		return sanitizedPayload;
+	}
+
+	if (typeof result.answer === "string" && result.answer.trim().length > 0) {
+		return result.answer.trim();
+	}
+
+	return buildCompactSandboxTTYSummary(sanitizedPayload);
+}
+
+function buildCompactSandboxTTYSummary(
+	payload: Record<string, unknown>,
+): Record<string, unknown> {
+	const summary: Record<string, unknown> = {};
+	const job =
+		typeof payload.job === "object" && payload.job !== null
+			? (payload.job as Record<string, unknown>)
+			: null;
+	const result =
+		typeof payload.result === "object" && payload.result !== null
+			? (payload.result as Record<string, unknown>)
+			: null;
+
+	if (job) {
+		const jobSummary: Record<string, unknown> = {};
+		if (typeof job.id === "string" && job.id.length > 0) {
+			jobSummary.id = job.id;
+		}
+		if (typeof job.status === "string" && job.status.length > 0) {
+			jobSummary.status = job.status;
+		}
+		if (Object.keys(jobSummary).length > 0) {
+			summary.job = jobSummary;
+		}
+	}
+
+	if (typeof result?.exitCode === "number") {
+		summary.exitCode = result.exitCode;
+	}
+
+	return Object.keys(summary).length > 0 ? summary : payload;
+}
+
+function extractSandboxAnswerFromTranscript(value: unknown): string | null {
+	if (typeof value !== "string" || !looksLikeSandboxTranscript(value)) {
+		return null;
+	}
+
+	const parts: string[] = [];
+	for (const rawLine of value.split(/\r?\n/)) {
+		const line = rawLine.trim();
+		if (!line.startsWith("{")) {
+			continue;
+		}
+
+		try {
+			const parsed = JSON.parse(line) as Record<string, unknown>;
+			const extracted = extractOpencodeTextPart(parsed);
+			if (extracted) {
+				parts.push(extracted);
+			}
+		} catch {
+			// Ignore non-JSON transcript lines.
+		}
+	}
+
+	if (parts.length === 0) {
+		return null;
+	}
+
+	return parts.join("\n").trim();
+}
+
+function extractOpencodeTextPart(
+	event: Record<string, unknown>,
+): string | null {
+	if (event.type === "text") {
+		if (typeof event.text === "string" && event.text.trim().length > 0) {
+			return event.text;
+		}
+		if (event.part && typeof event.part === "object") {
+			const part = event.part as Record<string, unknown>;
+			if (typeof part.text === "string" && part.text.trim().length > 0) {
+				return part.text;
+			}
+			if (typeof part.content === "string" && part.content.trim().length > 0) {
+				return part.content;
+			}
+		}
+	}
+
+	return null;
+}
+
+function looksLikeSandboxTranscript(value: string): boolean {
+	return (
+		value.includes("opencode run --model") ||
+		value.includes("__NIA_PTY_EXIT__") ||
+		value.includes('"type":"step_start"') ||
+		value.includes('"type":"tool_use"') ||
+		value.includes('"type":"text"')
+	);
 }
 
 export function buildExperimentalQuerySearchPayload(input: {
@@ -370,6 +524,161 @@ const webCommand = annotate(
 	],
 );
 
+const sandboxJobCommand = annotate(
+	app
+		.sub("job")
+		.meta({
+			description: "Fetch a sandbox search job by id",
+		})
+		.args([
+			{
+				name: "jobId",
+				type: "string",
+				description: "Job id (UUID) from a previous `nia search sandbox` run",
+				required: true,
+			},
+		] as const)
+		.run(async ({ args, flags }) => {
+			const fmt = createOutput({ color: flags.color });
+
+			await withErrorHandling(
+				{ domain: "Search", verbose: Boolean(flags.verbose) },
+				async () => {
+					const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+					const result = await cliSdk.sandbox.getJob(args.jobId);
+					fmt.output(result);
+				},
+			);
+		}),
+	["Re-fetch job status and result without starting a new sandbox run."],
+);
+
+const sandboxSearchCommand = annotate(
+	app
+		.sub("sandbox")
+		.meta({
+			description: "Agentic search in an ephemeral sandbox clone",
+		})
+		.command(sandboxJobCommand)
+		.args([
+			{
+				name: "query",
+				type: "string",
+				description: "Natural-language task or question about the repository",
+				required: true,
+			},
+		] as const)
+		.flags({
+			repository: {
+				type: "string",
+				short: "r",
+				description:
+					"Full HTTPS URL of the git repository (e.g. https://github.com/org/repo). Short owner/repo paths are not accepted.",
+				required: true,
+			},
+			ref: {
+				type: "string",
+				description: "Optional git ref (branch, tag, or commit) to check out",
+			},
+			stream: {
+				type: "boolean",
+				description:
+					"Stream sandbox progress updates (use --no-stream to disable)",
+				default: true,
+			},
+		})
+		.run(async ({ args, flags }) => {
+			const fmt = createOutput({ color: flags.color });
+
+			await withErrorHandling(
+				{ domain: "Search", verbose: Boolean(flags.verbose) },
+				async () => {
+					const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+
+					const body = {
+						repository: flags.repository,
+						query: args.query,
+						...(flags.ref ? { ref: flags.ref } : {}),
+					};
+
+					if (flags.stream === false) {
+						const result = await cliSdk.sandbox.search(body);
+						if (
+							process.stdout.isTTY &&
+							fmt.format === "text" &&
+							typeof result === "object" &&
+							result !== null
+						) {
+							fmt.output(
+								sanitizeSandboxFinalPayloadForTTY(
+									result as Record<string, unknown>,
+									{ verbose: Boolean(flags.verbose) },
+								),
+							);
+							return;
+						}
+
+						fmt.output(result);
+						return;
+					}
+
+					let finalPayload: Record<string, unknown> | null = null;
+					let streamError: Extract<
+						CliSandboxSearchSseEnvelope,
+						{ type: "error" }
+					> | null = null;
+					let renderedSandboxText = false;
+					let renderedSandboxActivity = false;
+
+					for await (const event of cliSdk.sandbox.streamSearch(body)) {
+						const renderResult = renderSandboxSearchStreamEvent(event, {
+							color: flags.color,
+							verbose: Boolean(flags.verbose),
+						});
+						renderedSandboxText ||= renderResult.renderedText;
+						renderedSandboxActivity ||= renderResult.renderedActivity;
+
+						if (event.type === "result") {
+							finalPayload = event.payload;
+						}
+						if (event.type === "error") {
+							streamError = event;
+						}
+					}
+
+					if (streamError && !finalPayload) {
+						throw new Error(streamError.message);
+					}
+
+					if (finalPayload && process.stdout.isTTY && fmt.format === "text") {
+						if (!flags.verbose && renderedSandboxText) {
+							return;
+						}
+
+						const ttyPayload = sanitizeSandboxFinalPayloadForTTY(finalPayload, {
+							verbose: Boolean(flags.verbose),
+						});
+						if (renderedSandboxActivity) {
+							console.log();
+						}
+						fmt.output(ttyPayload);
+						return;
+					}
+
+					if (finalPayload && process.stdout.isTTY) {
+						fmt.output(finalPayload);
+					}
+				},
+			);
+		}),
+	[
+		"Runs in a remote sandbox with a fresh clone (or cache), not indexed Nia sources.",
+		"Prefer `nia search query` when the repo is already indexed; use sandbox for ad-hoc exploration or repos you have not added.",
+		"Expect longer latency than indexed search; usage may be billed as a query on the server.",
+		"Subcommand `nia search sandbox job <jobId>` re-fetches an earlier job.",
+	],
+);
+
 const deepCommand = annotate(
 	app
 		.sub("deep")
@@ -434,11 +743,13 @@ export const searchCommand = annotate(
 		.command(universalCommand)
 		.command(queryCommand)
 		.command(webCommand)
+		.command(sandboxSearchCommand)
 		.command(deepCommand),
 	[
 		"Always check indexed sources before falling back to web search.",
 		"Prefer `query` for targeted search with specific repos/docs, `universal` for broad search across all indexed sources.",
 		"Only use `web` when the source is completely unknown and not indexed.",
+		"Use `sandbox` for agentic search in an ephemeral repo clone when indexing is unnecessary or unavailable.",
 		"Use `deep` for complex multi-step research (Pro plan required).",
 	],
 );

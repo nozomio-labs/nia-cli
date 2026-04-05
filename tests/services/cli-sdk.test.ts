@@ -1,6 +1,36 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { rmSync } from "node:fs";
 
+const originalFetch = globalThis.fetch;
+type FetchMock = (
+	...args: Parameters<typeof fetch>
+) => ReturnType<typeof fetch>;
+const mockFetch = mock<FetchMock>(
+	(..._args: Parameters<typeof fetch>): ReturnType<typeof fetch> =>
+		Promise.resolve(createSseResponse([])),
+);
+
+function createSseResponse(events: Record<string, unknown>[]): Response {
+	const encoder = new TextEncoder();
+	const stream = new ReadableStream<Uint8Array>({
+		start(controller) {
+			for (const event of events) {
+				controller.enqueue(
+					encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+				);
+			}
+			controller.close();
+		},
+	});
+
+	return new Response(stream, {
+		status: 200,
+		headers: {
+			"Content-Type": "text/event-stream",
+		},
+	});
+}
+
 const mockExperimentalUsageGet = mock(() =>
 	Promise.resolve({
 		data: {
@@ -179,6 +209,47 @@ const mockExperimentalSearchPost = mock((body: Record<string, unknown>) =>
 	}),
 );
 
+const mockExperimentalSandboxSearchPost = mock(
+	(body: Record<string, unknown>) =>
+		Promise.resolve({
+			data: {
+				workspaceKind: "git_repository",
+				job: { id: "job-sdk", query: body.query, status: "completed" },
+				result: {
+					answer: "sdk sandbox",
+					rawOutput: "",
+					command: "x",
+					exitCode: 0,
+					workspacePath: "/w",
+					volumeName: null,
+					cacheSubpath: null,
+				},
+			},
+			error: null,
+			status: 200,
+		}),
+);
+
+const mockExperimentalSandboxJobGet = mock((params: { jobId: string }) =>
+	Promise.resolve({
+		data: {
+			workspaceKind: "git_repository",
+			job: { id: params.jobId, query: "q", status: "completed" },
+			result: {
+				answer: "job get",
+				rawOutput: "",
+				command: "x",
+				exitCode: 0,
+				workspacePath: "/w",
+				volumeName: null,
+				cacheSubpath: null,
+			},
+		},
+		error: null,
+		status: 200,
+	}),
+);
+
 const mockLegacyUsageGet = mock(() =>
 	Promise.resolve({ tier: "Free", usage: {} }),
 );
@@ -214,6 +285,14 @@ const mockCreateExperimentalClient = mock(() => ({
 	search: {
 		post: mockExperimentalSearchPost,
 	},
+	sandbox: {
+		search: {
+			post: mockExperimentalSandboxSearchPost,
+		},
+		jobs: (params: { jobId: string }) => ({
+			get: () => mockExperimentalSandboxJobGet(params),
+		}),
+	},
 	sources: Object.assign(
 		(params: { id: string | number }) => ({
 			get: () => mockExperimentalSourceGet(params),
@@ -248,6 +327,10 @@ mock.module("@nozomioai/nia-sdk", () => ({
 }));
 
 mock.module("nia-ai-ts", () => ({
+	ApiError: class extends Error {
+		status = 500;
+		body?: unknown;
+	},
 	NiaSDK: class {
 		search = {
 			query: mockLegacySearchQuery,
@@ -263,6 +346,8 @@ mock.module("nia-ai-ts", () => ({
 		BASE: "",
 		TOKEN: "",
 	},
+	NiaSDKError: class extends Error {},
+	NiaTimeoutError: class extends Error {},
 	V2ApiService: {
 		getUsageSummaryV2V2UsageGet: mockLegacyUsageGet,
 	},
@@ -311,6 +396,8 @@ describe("cli sdk adapter", () => {
 			mockExperimentalSourceContentGet,
 			mockExperimentalSourceGrepPost,
 			mockExperimentalSearchPost,
+			mockExperimentalSandboxSearchPost,
+			mockExperimentalSandboxJobGet,
 			mockLegacyUsageGet,
 			mockLegacySourcesCreate,
 			mockLegacySourcesList,
@@ -325,6 +412,9 @@ describe("cli sdk adapter", () => {
 		]) {
 			fn.mockClear();
 		}
+
+		mockFetch.mockReset();
+		globalThis.fetch = mockFetch as unknown as typeof fetch;
 	});
 
 	afterEach(() => {
@@ -337,6 +427,7 @@ describe("cli sdk adapter", () => {
 		delete process.env.NIA_API_KEY;
 		delete process.env.NIA_BASE_URL;
 		setExperimentalOverride(undefined);
+		globalThis.fetch = originalFetch;
 	});
 
 	test("uses the experimental sdk for usage when experimental mode is enabled", async () => {
@@ -507,6 +598,144 @@ describe("cli sdk adapter", () => {
 		});
 	});
 
+	test("calls sandbox endpoints via Eden when experimental mode is enabled", async () => {
+		await writeConfig({
+			apiKey: "nia_exp_key",
+			baseUrl: "https://apigcp.trynia.ai/v2",
+			useExperimentalApi: true,
+			output: undefined,
+		});
+
+		const sdk = await createCliSdk();
+		const sandboxResult = await sdk.sandbox.search({
+			repository: "https://github.com/org/repo",
+			query: "How is routing implemented?",
+			ref: "main",
+		});
+		const jobResult = await sdk.sandbox.getJob("abc-123");
+
+		expect(mockExperimentalSandboxSearchPost).toHaveBeenCalledWith({
+			repository: "https://github.com/org/repo",
+			query: "How is routing implemented?",
+			ref: "main",
+		});
+		expect(mockExperimentalSandboxJobGet).toHaveBeenCalledWith({
+			jobId: "abc-123",
+		});
+		expect(sandboxResult).toMatchObject({
+			result: { answer: "sdk sandbox" },
+		});
+		expect(jobResult).toMatchObject({
+			result: { answer: "job get" },
+		});
+	});
+
+	test("streams sandbox search via fetch and parses SSE envelopes", async () => {
+		await writeConfig({
+			apiKey: "nia_std_key",
+			baseUrl: "https://apigcp.trynia.ai/v2",
+			useExperimentalApi: false,
+			output: undefined,
+		});
+		mockFetch.mockImplementationOnce(() =>
+			Promise.resolve(
+				createSseResponse([
+					{ type: "job", jobId: "sandbox-stream-1" },
+					{
+						type: "status",
+						jobStatus: "running",
+						runtimeStatus: "ready",
+					},
+					{
+						type: "result",
+						jobId: "sandbox-stream-1",
+						payload: {
+							workspaceKind: "git_repository",
+							result: { answer: "streamed answer" },
+						},
+					},
+					{ type: "done" },
+				]),
+			),
+		);
+
+		const sdk = await createCliSdk();
+		const events: Record<string, unknown>[] = [];
+		for await (const event of sdk.sandbox.streamSearch({
+			repository: "https://github.com/org/repo",
+			query: "How is routing implemented?",
+			ref: "main",
+		})) {
+			events.push(event);
+		}
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			"https://api.trynia.ai/sandbox/search",
+			expect.objectContaining({
+				method: "POST",
+				headers: expect.objectContaining({
+					Authorization: "Bearer nia_std_key",
+					Accept: "text/event-stream",
+					"Content-Type": "application/json",
+				}),
+			}),
+		);
+		expect(
+			JSON.parse(
+				String((mockFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.body),
+			),
+		).toEqual({
+			repository: "https://github.com/org/repo",
+			query: "How is routing implemented?",
+			ref: "main",
+			stream: true,
+		});
+		expect(events).toEqual([
+			{ type: "job", jobId: "sandbox-stream-1" },
+			{
+				type: "status",
+				jobStatus: "running",
+				runtimeStatus: "ready",
+			},
+			{
+				type: "result",
+				jobId: "sandbox-stream-1",
+				payload: {
+					workspaceKind: "git_repository",
+					result: { answer: "streamed answer" },
+				},
+			},
+			{ type: "done" },
+		]);
+	});
+
+	test("rethrows sandbox stream 404s with the sandbox base URL hint", async () => {
+		await writeConfig({
+			apiKey: "nia_std_key",
+			baseUrl: "https://apigcp.trynia.ai/v2",
+			useExperimentalApi: false,
+			output: undefined,
+		});
+		mockFetch.mockImplementationOnce(() =>
+			Promise.resolve(new Response("missing", { status: 404 })),
+		);
+
+		const sdk = await createCliSdk();
+
+		await expect(
+			(async () => {
+				for await (const _event of sdk.sandbox.streamSearch({
+					repository: "https://github.com/org/repo",
+					query: "How is routing implemented?",
+				})) {
+					// no-op
+				}
+			})(),
+		).rejects.toThrow(
+			"Sandbox HTTP 404 at https://api.trynia.ai. The default host does not serve POST /sandbox/search yet.",
+		);
+	});
+
 	test("falls back to the legacy sdk when experimental mode is disabled", async () => {
 		await writeConfig({
 			apiKey: "nia_std_key",
@@ -526,6 +755,27 @@ describe("cli sdk adapter", () => {
 		expect(mockLegacySourcesList).toHaveBeenCalledWith({ query: "legacy" });
 		expect(mockLegacySearchQuery).toHaveBeenCalledWith({
 			messages: [{ role: "user", content: "legacy" }],
+		});
+
+		const sandboxResult = await sdk.sandbox.search({
+			repository: "https://github.com/a/b",
+			query: "q",
+		});
+		const jobResult = await sdk.sandbox.getJob("any-id");
+
+		expect(mockCreateExperimentalClient).toHaveBeenCalledTimes(1);
+		expect(mockExperimentalSandboxSearchPost).toHaveBeenCalledWith({
+			repository: "https://github.com/a/b",
+			query: "q",
+		});
+		expect(mockExperimentalSandboxJobGet).toHaveBeenCalledWith({
+			jobId: "any-id",
+		});
+		expect(sandboxResult).toMatchObject({
+			result: { answer: "sdk sandbox" },
+		});
+		expect(jobResult).toMatchObject({
+			result: { answer: "job get" },
 		});
 	});
 

@@ -1,10 +1,104 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { rmSync } from "node:fs";
+import { formatWithOptions } from "node:util";
 import {
 	getConfigDirPath,
 	resetConfig,
 	writeConfig,
 } from "../helpers/config-store.ts";
+
+const originalFetch = globalThis.fetch;
+type FetchMock = (
+	...args: Parameters<typeof fetch>
+) => ReturnType<typeof fetch>;
+const mockFetch = mock<FetchMock>(
+	(..._args: Parameters<typeof fetch>): ReturnType<typeof fetch> =>
+		Promise.resolve(createSseResponse([])),
+);
+
+function createSseResponse(events: Record<string, unknown>[]): Response {
+	const encoder = new TextEncoder();
+	const stream = new ReadableStream<Uint8Array>({
+		start(controller) {
+			for (const event of events) {
+				controller.enqueue(
+					encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+				);
+			}
+			controller.close();
+		},
+	});
+
+	return new Response(stream, {
+		status: 200,
+		headers: {
+			"Content-Type": "text/event-stream",
+		},
+	});
+}
+
+function normalizeOutputChunk(chunk: unknown): string {
+	if (typeof chunk === "string") {
+		return chunk;
+	}
+
+	if (chunk instanceof Uint8Array) {
+		return new TextDecoder().decode(chunk);
+	}
+
+	return String(chunk);
+}
+
+async function captureCommandOutput(
+	run: () => Promise<void>,
+	options: { stdoutTTY?: boolean } = {},
+): Promise<{ stdout: string; stderr: string }> {
+	const stdout: string[] = [];
+	const stderr: string[] = [];
+	const originalLog = console.log;
+	const originalError = console.error;
+	const originalStdoutWrite = process.stdout.write;
+	const originalStderrWrite = process.stderr.write;
+	const originalStdoutTTY = process.stdout.isTTY;
+
+	Object.defineProperty(process.stdout, "isTTY", {
+		value: options.stdoutTTY ?? true,
+		configurable: true,
+	});
+
+	console.log = ((...args: unknown[]) => {
+		stdout.push(`${formatWithOptions({ colors: false }, ...args)}\n`);
+	}) as typeof console.log;
+	console.error = ((...args: unknown[]) => {
+		stderr.push(`${formatWithOptions({ colors: false }, ...args)}\n`);
+	}) as typeof console.error;
+	process.stdout.write = ((chunk: unknown) => {
+		stdout.push(normalizeOutputChunk(chunk));
+		return true;
+	}) as typeof process.stdout.write;
+	process.stderr.write = ((chunk: unknown) => {
+		stderr.push(normalizeOutputChunk(chunk));
+		return true;
+	}) as typeof process.stderr.write;
+
+	try {
+		await run();
+	} finally {
+		console.log = originalLog;
+		console.error = originalError;
+		process.stdout.write = originalStdoutWrite;
+		process.stderr.write = originalStderrWrite;
+		Object.defineProperty(process.stdout, "isTTY", {
+			value: originalStdoutTTY,
+			configurable: true,
+		});
+	}
+
+	return {
+		stdout: stdout.join(""),
+		stderr: stderr.join(""),
+	};
+}
 
 // --- Mock SDK ---
 
@@ -52,6 +146,58 @@ const mockExperimentalSearchPost = mock(() =>
 	}),
 );
 
+const mockSandboxSearchPost = mock((body: Record<string, unknown>) =>
+	Promise.resolve({
+		data: {
+			workspaceKind: "git_repository",
+			job: {
+				id: "sandbox-job-1",
+				status: "completed",
+				query: body.query,
+				createdAt: new Date(),
+				completedAt: new Date(),
+			},
+			result: {
+				answer: "Sandbox agent answer",
+				rawOutput: "",
+				command: "opencode",
+				exitCode: 0,
+				workspacePath: "/workspace",
+				volumeName: null,
+				cacheSubpath: null,
+			},
+		},
+		error: null,
+		status: 200,
+	}),
+);
+
+const mockSandboxJobGet = mock((params: { jobId: string }) =>
+	Promise.resolve({
+		data: {
+			workspaceKind: "git_repository",
+			job: {
+				id: params.jobId,
+				status: "completed",
+				query: "prior query",
+				createdAt: new Date(),
+				completedAt: new Date(),
+			},
+			result: {
+				answer: "Job fetch answer",
+				rawOutput: "",
+				command: "opencode",
+				exitCode: 0,
+				workspacePath: "/workspace",
+				volumeName: null,
+				cacheSubpath: null,
+			},
+		},
+		error: null,
+		status: 200,
+	}),
+);
+
 mock.module("@nozomioai/nia-sdk", () => ({
 	createClient: mock(() => ({
 		usage: {
@@ -59,6 +205,14 @@ mock.module("@nozomioai/nia-sdk", () => ({
 		},
 		search: {
 			post: mockExperimentalSearchPost,
+		},
+		sandbox: {
+			search: {
+				post: mockSandboxSearchPost,
+			},
+			jobs: (params: { jobId: string }) => ({
+				get: () => mockSandboxJobGet(params),
+			}),
 		},
 		sources: Object.assign(
 			() => ({
@@ -105,6 +259,10 @@ mock.module("@nozomioai/nia-sdk", () => ({
 }));
 
 mock.module("nia-ai-ts", () => ({
+	ApiError: class extends Error {
+		status = 500;
+		body?: unknown;
+	},
 	NiaSDK: class {
 		search = {
 			universal: mockUniversal,
@@ -118,6 +276,24 @@ mock.module("nia-ai-ts", () => ({
 	OpenAPI: {
 		BASE: "",
 		TOKEN: "",
+	},
+	NiaSDKError: class extends Error {},
+	NiaTimeoutError: class extends Error {},
+	V2ApiDataSourcesService: {
+		readDocumentationFileV2V2DataSourcesSourceIdReadGet: mock(() =>
+			Promise.resolve({}),
+		),
+		grepDocumentationV2V2DataSourcesSourceIdGrepPost: mock(() =>
+			Promise.resolve({}),
+		),
+		getDocumentationTreeV2V2DataSourcesSourceIdTreeGet: mock(() =>
+			Promise.resolve({}),
+		),
+	},
+	V2ApiSourcesService: {
+		getSourceV2SourcesSourceIdGet: mock(() => Promise.resolve({})),
+		updateSourceV2SourcesSourceIdPatch: mock(() => Promise.resolve({})),
+		deleteSourceV2SourcesSourceIdDelete: mock(() => Promise.resolve({})),
 	},
 }));
 
@@ -143,6 +319,80 @@ describe("search commands", () => {
 		mockWeb.mockClear();
 		mockDeep.mockClear();
 		mockExperimentalSearchPost.mockClear();
+		mockSandboxSearchPost.mockClear();
+		mockSandboxJobGet.mockClear();
+		mockFetch.mockReset();
+		mockFetch.mockImplementation(() =>
+			Promise.resolve(
+				createSseResponse([
+					{ type: "job", jobId: "sandbox-job-stream" },
+					{
+						type: "status",
+						jobStatus: "running",
+						runtimeStatus: "ready",
+					},
+					{
+						type: "opencode",
+						event: {
+							type: "step_start",
+							part: { type: "step-start" },
+						},
+					},
+					{
+						type: "opencode",
+						event: {
+							type: "tool_use",
+							part: {
+								tool: "read",
+								state: {
+									status: "completed",
+									title: "Read src/middleware/auth.ts",
+									metadata: { exit: 0 },
+								},
+							},
+						},
+					},
+					{
+						type: "opencode",
+						event: {
+							type: "step_finish",
+							part: { reason: "tool-calls" },
+						},
+					},
+					{
+						type: "opencode",
+						event: {
+							type: "text",
+							part: { text: "Sandbox stream answer" },
+						},
+					},
+					{
+						type: "opencode",
+						event: {
+							type: "step_finish",
+							part: { reason: "stop" },
+						},
+					},
+					{
+						type: "result",
+						jobId: "sandbox-job-stream",
+						payload: {
+							workspaceKind: "git_repository",
+							job: {
+								id: "sandbox-job-stream",
+								status: "completed",
+								query: "Where is the auth middleware?",
+							},
+							result: {
+								answer: "Sandbox stream answer",
+							},
+						},
+					},
+					{ type: "done" },
+				]),
+			),
+		);
+		globalThis.fetch = mockFetch as unknown as typeof fetch;
 	});
 
 	afterEach(() => {
@@ -152,6 +402,7 @@ describe("search commands", () => {
 		} catch {
 			// Ignore
 		}
+		globalThis.fetch = originalFetch;
 	});
 
 	describe("universal search", () => {
@@ -353,6 +604,301 @@ describe("search commands", () => {
 					mode: "query",
 					messages: [{ role: "user", content: "How does auth work?" }],
 					sources: [{ identifier: "react-docs", type: "documentation" }],
+				});
+			} finally {
+				console.log = originalLog;
+				console.error = originalError;
+			}
+		});
+	});
+
+	describe("sandbox search", () => {
+		test("streams structured opencode activity by default in TTY", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const { stdout, stderr } = await captureCommandOutput(() =>
+				searchCommand.execute({
+					argv: [
+						"sandbox",
+						"-r",
+						"https://github.com/acme/widget",
+						"Where is the auth middleware?",
+					],
+				}),
+			);
+			const plainStdout = Bun.stripANSI(stdout);
+
+			expect(stderr).toBe("");
+			expect(mockSandboxSearchPost).not.toHaveBeenCalled();
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(mockFetch).toHaveBeenCalledWith(
+				"https://api.trynia.ai/sandbox/search",
+				expect.objectContaining({
+					method: "POST",
+					headers: expect.objectContaining({
+						Authorization: "Bearer nia_test_search_key",
+						Accept: "text/event-stream",
+						"Content-Type": "application/json",
+					}),
+				}),
+			);
+			expect(
+				JSON.parse(
+					String(
+						(mockFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.body,
+					),
+				),
+			).toEqual({
+				repository: "https://github.com/acme/widget",
+				query: "Where is the auth middleware?",
+				stream: true,
+			});
+			expect(plainStdout).toContain("Tool read: Read src/middleware/auth.ts");
+			expect(plainStdout).toContain("Sandbox stream answer");
+			expect(plainStdout.match(/Sandbox stream answer/g)?.length ?? 0).toBe(1);
+			expect(plainStdout).not.toContain("Step started.");
+			expect(plainStdout).not.toContain("Step finished:");
+			expect(plainStdout).not.toContain("Sandbox job:");
+			expect(plainStdout).not.toContain("Status: running");
+			expect(plainStdout).not.toContain("workspaceKind");
+		});
+
+		test("passes optional ref to streamed sandbox search", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const originalLog = console.log;
+			const originalError = console.error;
+			console.log = (() => {}) as typeof console.log;
+			console.error = (() => {}) as typeof console.error;
+
+			try {
+				await searchCommand.execute({
+					argv: [
+						"sandbox",
+						"-r",
+						"https://github.com/acme/widget",
+						"--ref",
+						"v1.0.0",
+						"Explain the release process",
+					],
+				});
+
+				expect(mockSandboxSearchPost).not.toHaveBeenCalled();
+				expect(
+					JSON.parse(
+						String(
+							(mockFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.body,
+						),
+					),
+				).toEqual({
+					repository: "https://github.com/acme/widget",
+					query: "Explain the release process",
+					ref: "v1.0.0",
+					stream: true,
+				});
+			} finally {
+				console.log = originalLog;
+				console.error = originalError;
+			}
+		});
+
+		test("shows detailed streamed sandbox progress under --verbose", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+
+			mockFetch.mockImplementationOnce(() =>
+				Promise.resolve(
+					createSseResponse([
+						{ type: "job", jobId: "sandbox-job-stream" },
+						{
+							type: "status",
+							jobStatus: "running",
+							runtimeStatus: "ready",
+						},
+						{
+							type: "opencode",
+							event: {
+								type: "tool_use",
+								part: {
+									tool: "bash",
+									state: {
+										status: "completed",
+										title: "Inspect auth files",
+										input: {
+											command: "rg auth src tests",
+										},
+										metadata: { exit: 0 },
+									},
+								},
+							},
+						},
+						{
+							type: "opencode",
+							event: {
+								type: "text",
+								part: { text: "Sandbox stream answer" },
+							},
+						},
+						{
+							type: "result",
+							jobId: "sandbox-job-stream",
+							payload: {
+								workspaceKind: "git_repository",
+								job: {
+									id: "sandbox-job-stream",
+									status: "completed",
+									query: "Where is the auth middleware?",
+								},
+								result: {
+									answer: "Sandbox stream answer",
+									rawOutput:
+										'{"type":"tool_use","part":{"tool":"bash","state":{"title":"Inspect auth files"}}}\n{"type":"text","text":"Sandbox stream answer"}',
+								},
+							},
+						},
+						{ type: "done" },
+					]),
+				),
+			);
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const { stdout, stderr } = await captureCommandOutput(() =>
+				searchCommand.execute({
+					argv: [
+						"sandbox",
+						"--verbose",
+						"-r",
+						"https://github.com/acme/widget",
+						"Where is the auth middleware?",
+					],
+				}),
+			);
+			const plainStdout = Bun.stripANSI(stdout);
+
+			expect(stderr).toBe("");
+			expect(plainStdout).toContain("Sandbox job: sandbox-job-stream");
+			expect(plainStdout).toContain("Status: running");
+			expect(plainStdout).toContain("Tool bash: Inspect auth files");
+			expect(plainStdout).toContain("workspaceKind");
+			expect(plainStdout).toContain("Sandbox stream answer");
+			expect(plainStdout).not.toContain("rawOutput");
+		});
+
+		test("uses --no-stream to keep the JSON sandbox search path", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const { stdout, stderr } = await captureCommandOutput(() =>
+				searchCommand.execute({
+					argv: [
+						"sandbox",
+						"--no-stream",
+						"-r",
+						"https://github.com/acme/widget",
+						"--ref",
+						"v1.0.0",
+						"Explain the release process",
+					],
+				}),
+			);
+			const plainStdout = Bun.stripANSI(stdout);
+
+			expect(stderr).toBe("");
+			expect(mockFetch).not.toHaveBeenCalled();
+			expect(mockSandboxSearchPost).toHaveBeenCalledWith({
+				repository: "https://github.com/acme/widget",
+				query: "Explain the release process",
+				ref: "v1.0.0",
+			});
+			expect(plainStdout).toContain("Sandbox agent answer");
+			expect(plainStdout).not.toContain("workspacePath");
+			expect(plainStdout).not.toContain("rawOutput");
+		});
+
+		test("keeps sandbox streaming output as JSON lines when stdout is not a TTY", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const { stdout, stderr } = await captureCommandOutput(
+				() =>
+					searchCommand.execute({
+						argv: [
+							"sandbox",
+							"-r",
+							"https://github.com/acme/widget",
+							"Where is the auth middleware?",
+						],
+					}),
+				{ stdoutTTY: false },
+			);
+			const events = stdout
+				.trim()
+				.split("\n")
+				.filter((line) => line.length > 0)
+				.map((line) => JSON.parse(line) as { type: string });
+
+			expect(stderr).toBe("");
+			expect(events.map((event) => event.type)).toEqual([
+				"job",
+				"status",
+				"opencode",
+				"opencode",
+				"opencode",
+				"opencode",
+				"opencode",
+				"result",
+				"done",
+			]);
+			expect(stdout).not.toContain("Step started.");
+		});
+
+		test("fetches a sandbox job by id under sandbox job", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const originalLog = console.log;
+			const originalError = console.error;
+			console.log = (() => {}) as typeof console.log;
+			console.error = (() => {}) as typeof console.error;
+
+			try {
+				await searchCommand.execute({
+					argv: ["sandbox", "job", "550e8400-e29b-41d4-a716-446655440000"],
+				});
+
+				expect(mockSandboxJobGet).toHaveBeenCalledWith({
+					jobId: "550e8400-e29b-41d4-a716-446655440000",
 				});
 			} finally {
 				console.log = originalLog;

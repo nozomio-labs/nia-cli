@@ -5,7 +5,7 @@
     "": {
       "name": "nia-cli",
       "dependencies": {
-        "@nozomioai/nia-sdk": "^0.0.2",
+        "@nozomioai/nia-sdk": "^0.0.4",
         "chokidar": "^5.0.0",
       },
       "devDependencies": {
@@ -121,7 +121,7 @@
 
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
 
-    "@nozomioai/nia-sdk": ["@nozomioai/nia-sdk@0.0.2", "", { "dependencies": { "@elysiajs/eden": "^1.4.8" } }, "sha512-a5HXmDazBkV49YiTKLryu7YT9RhdkY2OOmBdpFAKQAh4RI2gUbZ0c5i3l+ut7LK74B3q1hfuwMxZtmcTpBISWw=="],
+    "@nozomioai/nia-sdk": ["@nozomioai/nia-sdk@0.0.4", "", { "dependencies": { "@elysiajs/eden": "^1.4.8" } }, "sha512-/XeDYH1+2J41HdL2iUATjCGx45FVMNIDycxYpSDKsXyOFbSlRiwRqaeZkyEkkeO3kSyYdLHJadrkLESeErZz7A=="],
 
     "@sinclair/typebox": ["@sinclair/typebox@0.34.48", "", {}, "sha512-kKJTNuK3AQOrgjjotVxMrCn1sUJwM76wMszfq1kdU4uYVJjvEWuFQ6HgvLt4Xz3fSmZlTOxJ/Ie13KnIcWQXFA=="],
 

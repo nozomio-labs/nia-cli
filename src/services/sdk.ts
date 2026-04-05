@@ -5,6 +5,7 @@ import {
 	V2ApiDataSourcesService,
 	V2ApiSourcesService,
 } from "nia-ai-ts";
+import { createResponseError } from "../utils/errors.ts";
 import {
 	configStore,
 	DEFAULT_BASE_URL,
@@ -12,6 +13,7 @@ import {
 	getExperimentalOverride,
 	resolveApiKey,
 	resolveBaseUrl,
+	resolveSandboxBaseUrl,
 } from "./config.ts";
 
 export interface CreateSdkOptions {
@@ -91,6 +93,39 @@ export interface CliSearchQueryPayload {
 	};
 }
 
+/** Body for POST /sandbox/search. */
+export interface CliSandboxSearchBody {
+	repository: string;
+	query: string;
+	ref?: string;
+	stream?: boolean;
+}
+
+export type CliSandboxSearchJobPayload = Record<string, unknown>;
+
+export type CliSandboxSearchSseEnvelope =
+	| { type: "job"; jobId: string }
+	| {
+			type: "status";
+			jobStatus: string;
+			runtimeStatus?: string;
+			daytonaSandboxId?: string;
+			sandboxState?: string;
+	  }
+	| {
+			type: "opencode";
+			stream?: "stdout" | "stderr";
+			line?: string;
+			event?: unknown;
+	  }
+	| {
+			type: "result";
+			jobId: string;
+			payload: CliSandboxSearchJobPayload;
+	  }
+	| { type: "error"; message: string; name?: string; code?: string }
+	| { type: "done" };
+
 export interface CliSdk {
 	experimental: boolean;
 	usage: {
@@ -116,6 +151,13 @@ export interface CliSdk {
 	};
 	search: {
 		query(payload: Record<string, unknown>): Promise<unknown>;
+	};
+	sandbox: {
+		search(body: CliSandboxSearchBody): Promise<unknown>;
+		streamSearch(
+			body: CliSandboxSearchBody,
+		): AsyncIterable<CliSandboxSearchSseEnvelope>;
+		getJob(jobId: string): Promise<unknown>;
 	};
 }
 
@@ -149,6 +191,22 @@ export async function createSdk(
 		apiKey,
 		baseUrl,
 	});
+}
+
+type ErrorWithStatus = Error & { status?: number };
+
+/** Avoid mapping sandbox 404 to generic "Search resource not found" (no HTTP status on thrown error). */
+function throwSandboxEndpointNotFoundAsPlainError(err: unknown): never {
+	const e = err as ErrorWithStatus;
+	if (typeof e.status === "number" && e.status === 404) {
+		const base = resolveSandboxBaseUrl();
+		const fromEnv = Boolean(process.env.NIA_SANDBOX_BASE_URL?.trim());
+		const hint = fromEnv
+			? "Check NIA_SANDBOX_BASE_URL points to a server that exposes POST /sandbox/search."
+			: `The default host does not serve POST /sandbox/search yet. Set NIA_SANDBOX_BASE_URL to your nia-new API base URL (e.g. http://localhost:PORT).`;
+		throw new Error(`Sandbox HTTP 404 at ${base}. ${hint}`);
+	}
+	throw err;
 }
 
 export async function createCliSdk(
@@ -218,6 +276,77 @@ export async function createCliSdk(
 		return V2ApiService.getUsageSummaryV2V2UsageGet();
 	};
 
+	type EdenClient = ReturnType<typeof createClient>;
+
+	/** Sandbox Eden client uses {@link resolveSandboxBaseUrl} (default api.trynia.ai, or NIA_SANDBOX_BASE_URL). */
+	let sandboxEdenClient: EdenClient | null = null;
+	const getSandboxEdenClient = () => {
+		if (!sandboxEdenClient) {
+			const sandboxBaseUrl = resolveSandboxBaseUrl();
+			sandboxEdenClient = createClient(sandboxBaseUrl, {
+				apiKey: context.apiKey,
+			});
+		}
+		return sandboxEdenClient;
+	};
+
+	const sandboxHandlers = (getClient: () => EdenClient): CliSdk["sandbox"] => ({
+		async search(body: CliSandboxSearchBody) {
+			try {
+				const raw = await getClient().sandbox.search.post(body);
+				return unwrapExperimentalResponse(raw);
+			} catch (err) {
+				throwSandboxEndpointNotFoundAsPlainError(err);
+			}
+		},
+		async *streamSearch(body: CliSandboxSearchBody) {
+			const sandboxBaseUrl = resolveSandboxBaseUrl();
+
+			try {
+				const response = await fetch(`${sandboxBaseUrl}/sandbox/search`, {
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${context.apiKey}`,
+						Accept: "text/event-stream",
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						...body,
+						stream: true,
+					} satisfies CliSandboxSearchBody),
+				});
+
+				if (!response.ok) {
+					throw await createResponseError(
+						response,
+						`Sandbox stream request failed with status ${response.status}`,
+					);
+				}
+
+				if (!response.body) {
+					throw new Error("Sandbox stream response body is empty");
+				}
+
+				for await (const event of parseJsonSseStream<CliSandboxSearchSseEnvelope>(
+					response.body,
+				)) {
+					yield event;
+				}
+			} catch (err) {
+				throwSandboxEndpointNotFoundAsPlainError(err);
+			}
+		},
+		async getJob(jobId: string) {
+			try {
+				return unwrapExperimentalResponse(
+					await getClient().sandbox.jobs({ jobId }).get(),
+				);
+			} catch (err) {
+				throwSandboxEndpointNotFoundAsPlainError(err);
+			}
+		},
+	});
+
 	if (!context.experimental) {
 		return {
 			experimental: false,
@@ -258,6 +387,7 @@ export async function createCliSdk(
 					return legacyQuerySearch(payload);
 				},
 			},
+			sandbox: sandboxHandlers(getSandboxEdenClient),
 		};
 	}
 
@@ -407,6 +537,7 @@ export async function createCliSdk(
 				);
 			},
 		},
+		sandbox: sandboxHandlers(getSandboxEdenClient),
 	};
 }
 
@@ -877,4 +1008,56 @@ function toOptionalDatabase(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
+}
+
+async function* parseJsonSseStream<T extends Record<string, unknown>>(
+	stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<T> {
+	const reader = stream.getReader();
+	const decoder = new TextDecoder();
+	let buffer = "";
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) {
+			break;
+		}
+
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split("\n");
+		buffer = lines.pop() ?? "";
+
+		for (const rawLine of lines) {
+			const line = rawLine.replace(/\r$/, "");
+			const payload = parseJsonSseLine<T>(line);
+			if (payload) {
+				yield payload;
+			}
+		}
+	}
+
+	const trailing = parseJsonSseLine<T>(buffer.replace(/\r$/, ""));
+	if (trailing) {
+		yield trailing;
+	}
+}
+
+function parseJsonSseLine<T extends Record<string, unknown>>(
+	line: string,
+): T | null {
+	if (!line.startsWith("data:")) {
+		return null;
+	}
+
+	const payload = line.slice(5).trim();
+	if (!payload) {
+		return null;
+	}
+
+	try {
+		const parsed = JSON.parse(payload);
+		return isRecord(parsed) ? (parsed as T) : null;
+	} catch {
+		return null;
+	}
 }

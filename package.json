@@ -55,7 +55,7 @@
 		"typescript": "^6.0.2"
 	},
 	"dependencies": {
-		"@nozomioai/nia-sdk": "^0.0.2",
+		"@nozomioai/nia-sdk": "^0.0.4",
 		"chokidar": "^5.0.0"
 	}
 }
