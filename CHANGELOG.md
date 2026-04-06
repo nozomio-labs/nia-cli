@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.1.0
+
+### Minor Changes
+
+- a2621a6: Add `nia sources explore` command to browse globally indexed public sources from the CLI
+
 ## 0.0.15
 
 ### Patch Changes
