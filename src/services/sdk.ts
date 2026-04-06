@@ -148,6 +148,13 @@ export interface CliSdk {
 		tree(id: string, query?: CliSourceTreeQuery): Promise<unknown>;
 		content(id: string, query?: CliSourceContentQuery): Promise<unknown>;
 		grep(id: string, payload: CliSourceGrepBody): Promise<unknown>;
+		explore(params?: {
+			search?: string;
+			sourceType?: string;
+			sort?: string;
+			limit?: number;
+			offset?: number;
+		}): Promise<unknown>;
 	};
 	search: {
 		query(payload: Record<string, unknown>): Promise<unknown>;
@@ -276,6 +283,32 @@ export async function createCliSdk(
 		return V2ApiService.getUsageSummaryV2V2UsageGet();
 	};
 
+	const exploreGlobalSources = async (params?: {
+		search?: string;
+		sourceType?: string;
+		sort?: string;
+		limit?: number;
+		offset?: number;
+	}): Promise<unknown> => {
+		const url = new URL(`${context.baseUrl}/sources/explore`);
+		if (params?.search) url.searchParams.set("search", params.search);
+		if (params?.sourceType)
+			url.searchParams.set("source_type", params.sourceType);
+		if (params?.sort) url.searchParams.set("sort", params.sort);
+		if (params?.limit !== undefined)
+			url.searchParams.set("limit", String(params.limit));
+		if (params?.offset !== undefined)
+			url.searchParams.set("offset", String(params.offset));
+
+		const response = await fetch(url, {
+			headers: { Authorization: `Bearer ${context.apiKey}` },
+		});
+		if (!response.ok) {
+			throw await createResponseError(response, "Explore failed");
+		}
+		return response.json();
+	};
+
 	type EdenClient = ReturnType<typeof createClient>;
 
 	/** Sandbox Eden client uses {@link resolveSandboxBaseUrl} (default api.trynia.ai, or NIA_SANDBOX_BASE_URL). */
@@ -359,6 +392,9 @@ export async function createCliSdk(
 				},
 				list(params) {
 					return legacySdk.sources.list(params);
+				},
+				explore(params) {
+					return exploreGlobalSources(params);
 				},
 				resolve(identifier, type) {
 					return legacySdk.sources.resolve(identifier, type);
@@ -524,6 +560,9 @@ export async function createCliSdk(
 						),
 					() => legacyGrep(id, payload),
 				);
+			},
+			explore(params) {
+				return exploreGlobalSources(params);
 			},
 		},
 		search: {

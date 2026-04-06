@@ -860,6 +860,59 @@ const subscribeCommand = annotate(
 	],
 );
 
+const exploreCommand = annotate(
+	app
+		.sub("explore")
+		.meta({
+			description: "Browse globally indexed public sources",
+		})
+		.flags({
+			query: {
+				type: "string",
+				description: "Search query to filter sources",
+			},
+			type: {
+				type: "string",
+				description:
+					"Filter by type: repository, documentation, research_paper, huggingface_dataset",
+			},
+			sort: {
+				type: "string",
+				description:
+					"Sort: recently_indexed, most_subscribed, most_tokens, relevance (default: most_subscribed)",
+			},
+			limit: {
+				type: "number",
+				description: "Maximum number of results (default: 20)",
+			},
+			offset: {
+				type: "number",
+				description: "Offset for pagination",
+			},
+		})
+		.run(async ({ flags }) => {
+			const fmt = createOutput({ color: flags.color });
+			const sourceType = validateSourceType(flags.type);
+
+			await withErrorHandling({ domain: "Source" }, async () => {
+				const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+				const result = await cliSdk.sources.explore({
+					search: flags.query,
+					sourceType,
+					sort: flags.sort ?? "most_subscribed",
+					limit: flags.limit ?? 20,
+					offset: flags.offset,
+				});
+				fmt.output(result);
+			});
+		}),
+	[
+		"Browse the global catalog of publicly indexed sources.",
+		"Use `--query` to search by name, URL, or description.",
+		"Subscribe to a source with `nia sources subscribe <url>` for instant access.",
+	],
+);
+
 const writeCommand = app
 	.sub("write")
 	.meta({ description: "Write a file to an indexed source" })
@@ -1234,6 +1287,7 @@ export const sourcesCommand = annotate(
 		.command(treeCommand)
 		.command(lsCommand)
 		.command(subscribeCommand)
+		.command(exploreCommand)
 		.command(writeCommand)
 		.command(mvCommand)
 		.command(mkdirCommand)
