@@ -714,6 +714,51 @@ describe("search commands", () => {
 			}
 		});
 
+		test("passes shorthand repository and provider to streamed sandbox search", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const originalLog = console.log;
+			const originalError = console.error;
+			console.log = (() => {}) as typeof console.log;
+			console.error = (() => {}) as typeof console.error;
+
+			try {
+				await searchCommand.execute({
+					argv: [
+						"sandbox",
+						"-r",
+						"gitlabhq/gitlabhq",
+						"--provider",
+						"gitlab",
+						"Explain the release process",
+					],
+				});
+
+				expect(mockSandboxSearchPost).not.toHaveBeenCalled();
+				expect(
+					JSON.parse(
+						String(
+							(mockFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.body,
+						),
+					),
+				).toEqual({
+					repository: "gitlabhq/gitlabhq",
+					query: "Explain the release process",
+					provider: "gitlab",
+					stream: true,
+				});
+			} finally {
+				console.log = originalLog;
+				console.error = originalError;
+			}
+		});
+
 		test("shows detailed streamed sandbox progress under --verbose", async () => {
 			await writeConfig({
 				apiKey: "nia_test_search_key",
@@ -815,7 +860,9 @@ describe("search commands", () => {
 						"sandbox",
 						"--no-stream",
 						"-r",
-						"https://github.com/acme/widget",
+						"workspace/widget",
+						"--provider",
+						"bitbucket",
 						"--ref",
 						"v1.0.0",
 						"Explain the release process",
@@ -827,8 +874,9 @@ describe("search commands", () => {
 			expect(stderr).toBe("");
 			expect(mockFetch).not.toHaveBeenCalled();
 			expect(mockSandboxSearchPost).toHaveBeenCalledWith({
-				repository: "https://github.com/acme/widget",
+				repository: "workspace/widget",
 				query: "Explain the release process",
+				provider: "bitbucket",
 				ref: "v1.0.0",
 			});
 			expect(plainStdout).toContain("Sandbox agent answer");

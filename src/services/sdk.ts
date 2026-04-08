@@ -94,10 +94,13 @@ export interface CliSearchQueryPayload {
 }
 
 /** Body for POST /sandbox/search. */
+export type CliSandboxGitProvider = "github" | "gitlab" | "bitbucket";
+
 export interface CliSandboxSearchBody {
 	repository: string;
 	query: string;
 	ref?: string;
+	provider?: CliSandboxGitProvider;
 	stream?: boolean;
 }
 

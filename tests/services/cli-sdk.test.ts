@@ -608,16 +608,18 @@ describe("cli sdk adapter", () => {
 
 		const sdk = await createCliSdk();
 		const sandboxResult = await sdk.sandbox.search({
-			repository: "https://github.com/org/repo",
+			repository: "gitlabhq/gitlabhq",
 			query: "How is routing implemented?",
 			ref: "main",
+			provider: "gitlab",
 		});
 		const jobResult = await sdk.sandbox.getJob("abc-123");
 
 		expect(mockExperimentalSandboxSearchPost).toHaveBeenCalledWith({
-			repository: "https://github.com/org/repo",
+			repository: "gitlabhq/gitlabhq",
 			query: "How is routing implemented?",
 			ref: "main",
+			provider: "gitlab",
 		});
 		expect(mockExperimentalSandboxJobGet).toHaveBeenCalledWith({
 			jobId: "abc-123",
@@ -662,9 +664,10 @@ describe("cli sdk adapter", () => {
 		const sdk = await createCliSdk();
 		const events: Record<string, unknown>[] = [];
 		for await (const event of sdk.sandbox.streamSearch({
-			repository: "https://github.com/org/repo",
+			repository: "workspace/widget",
 			query: "How is routing implemented?",
 			ref: "main",
+			provider: "bitbucket",
 		})) {
 			events.push(event);
 		}
@@ -685,9 +688,10 @@ describe("cli sdk adapter", () => {
 				String((mockFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.body),
 			),
 		).toEqual({
-			repository: "https://github.com/org/repo",
+			repository: "workspace/widget",
 			query: "How is routing implemented?",
 			ref: "main",
+			provider: "bitbucket",
 			stream: true,
 		});
 		expect(events).toEqual([

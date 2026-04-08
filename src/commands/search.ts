@@ -1,6 +1,8 @@
 import { annotate } from "@crustjs/skills";
 import { app } from "../app.ts";
 import {
+	type CliSandboxGitProvider,
+	type CliSandboxSearchBody,
 	type CliSandboxSearchSseEnvelope,
 	type CliSearchQueryPayload,
 	createCliSdk,
@@ -485,12 +487,17 @@ const sandboxSearchCommand = annotate(
 				type: "string",
 				short: "r",
 				description:
-					"Full HTTPS URL of the git repository (e.g. https://github.com/org/repo). Short owner/repo paths are not accepted.",
+					"Git repository to search: full HTTPS URL or shorthand like owner/repo.",
 				required: true,
 			},
 			ref: {
 				type: "string",
 				description: "Optional git ref (branch, tag, or commit) to check out",
+			},
+			provider: {
+				type: "string",
+				description:
+					"Optional provider for shorthand repositories: github, gitlab, or bitbucket.",
 			},
 			stream: {
 				type: "boolean",
@@ -507,10 +514,13 @@ const sandboxSearchCommand = annotate(
 				async () => {
 					const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
 
-					const body = {
+					const body: CliSandboxSearchBody = {
 						repository: flags.repository,
 						query: args.query,
 						...(flags.ref ? { ref: flags.ref } : {}),
+						...(flags.provider
+							? { provider: flags.provider as CliSandboxGitProvider }
+							: {}),
 					};
 
 					if (flags.stream === false) {
