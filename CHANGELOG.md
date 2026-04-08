@@ -1,5 +1,12 @@
 # nia-cli
 
+## 0.1.1
+
+### Patch Changes
+
+- 8d9eca8: add non-TTY support for sandbox search steaming support
+- 531318d: support short repo name
+
 ## 0.1.0
 
 ### Minor Changes
