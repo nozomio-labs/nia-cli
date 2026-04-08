@@ -8,7 +8,10 @@ import {
 } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
-import { renderSandboxSearchStreamEvent } from "../utils/streaming.ts";
+import {
+	renderSandboxSearchStreamEvent,
+	sanitizeSandboxResultPayload,
+} from "../utils/streaming.ts";
 
 export function resolveQuerySearchMode(input: {
 	explicit?: string;
@@ -47,48 +50,18 @@ function sanitizeSandboxFinalPayloadForTTY(
 	payload: Record<string, unknown>,
 	options: { verbose?: boolean } = {},
 ): unknown {
+	const sanitizedPayload = sanitizeSandboxResultPayload(payload, {
+		omitRawOutput: true,
+	});
 	const result =
-		typeof payload.result === "object" && payload.result !== null
-			? { ...(payload.result as Record<string, unknown>) }
+		typeof sanitizedPayload.result === "object" &&
+		sanitizedPayload.result !== null
+			? (sanitizedPayload.result as Record<string, unknown>)
 			: null;
 
 	if (!result) {
-		return payload;
+		return sanitizedPayload;
 	}
-
-	const cleanedAnswerFromAnswer = extractSandboxAnswerFromTranscript(
-		result.answer,
-	);
-	const cleanedAnswerFromRawOutput = extractSandboxAnswerFromTranscript(
-		result.rawOutput,
-	);
-
-	delete result.rawOutput;
-
-	if (cleanedAnswerFromAnswer) {
-		result.answer = cleanedAnswerFromAnswer;
-	} else if (
-		typeof result.answer !== "string" ||
-		result.answer.trim().length === 0
-	) {
-		if (cleanedAnswerFromRawOutput) {
-			result.answer = cleanedAnswerFromRawOutput;
-		}
-	} else if (
-		typeof result.answer === "string" &&
-		looksLikeSandboxTranscript(result.answer)
-	) {
-		if (cleanedAnswerFromRawOutput) {
-			result.answer = cleanedAnswerFromRawOutput;
-		} else {
-			delete result.answer;
-		}
-	}
-
-	const sanitizedPayload = {
-		...payload,
-		result,
-	};
 
 	if (options.verbose) {
 		return sanitizedPayload;
@@ -132,67 +105,6 @@ function buildCompactSandboxTTYSummary(
 	}
 
 	return Object.keys(summary).length > 0 ? summary : payload;
-}
-
-function extractSandboxAnswerFromTranscript(value: unknown): string | null {
-	if (typeof value !== "string" || !looksLikeSandboxTranscript(value)) {
-		return null;
-	}
-
-	const parts: string[] = [];
-	for (const rawLine of value.split(/\r?\n/)) {
-		const line = rawLine.trim();
-		if (!line.startsWith("{")) {
-			continue;
-		}
-
-		try {
-			const parsed = JSON.parse(line) as Record<string, unknown>;
-			const extracted = extractOpencodeTextPart(parsed);
-			if (extracted) {
-				parts.push(extracted);
-			}
-		} catch {
-			// Ignore non-JSON transcript lines.
-		}
-	}
-
-	if (parts.length === 0) {
-		return null;
-	}
-
-	return parts.join("\n").trim();
-}
-
-function extractOpencodeTextPart(
-	event: Record<string, unknown>,
-): string | null {
-	if (event.type === "text") {
-		if (typeof event.text === "string" && event.text.trim().length > 0) {
-			return event.text;
-		}
-		if (event.part && typeof event.part === "object") {
-			const part = event.part as Record<string, unknown>;
-			if (typeof part.text === "string" && part.text.trim().length > 0) {
-				return part.text;
-			}
-			if (typeof part.content === "string" && part.content.trim().length > 0) {
-				return part.content;
-			}
-		}
-	}
-
-	return null;
-}
-
-function looksLikeSandboxTranscript(value: string): boolean {
-	return (
-		value.includes("opencode run --model") ||
-		value.includes("__NIA_PTY_EXIT__") ||
-		value.includes('"type":"step_start"') ||
-		value.includes('"type":"tool_use"') ||
-		value.includes('"type":"text"')
-	);
 }
 
 export function buildExperimentalQuerySearchPayload(input: {
@@ -603,19 +515,26 @@ const sandboxSearchCommand = annotate(
 
 					if (flags.stream === false) {
 						const result = await cliSdk.sandbox.search(body);
-						if (
-							process.stdout.isTTY &&
-							fmt.format === "text" &&
-							typeof result === "object" &&
-							result !== null
-						) {
-							fmt.output(
-								sanitizeSandboxFinalPayloadForTTY(
-									result as Record<string, unknown>,
-									{ verbose: Boolean(flags.verbose) },
-								),
-							);
-							return;
+						if (typeof result === "object" && result !== null) {
+							if (process.stdout.isTTY && fmt.format === "text") {
+								fmt.output(
+									sanitizeSandboxFinalPayloadForTTY(
+										result as Record<string, unknown>,
+										{ verbose: Boolean(flags.verbose) },
+									),
+								);
+								return;
+							}
+
+							if (!process.stdout.isTTY && !flags.verbose) {
+								fmt.output(
+									sanitizeSandboxResultPayload(
+										result as Record<string, unknown>,
+										{ omitRawOutput: true },
+									),
+								);
+								return;
+							}
 						}
 
 						fmt.output(result);

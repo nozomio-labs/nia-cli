@@ -95,7 +95,12 @@ export function renderSandboxSearchStreamEvent(
 	options: StreamRendererOptions = {},
 ): SandboxStreamRenderResult {
 	if (!process.stdout.isTTY) {
-		console.log(JSON.stringify(event));
+		const renderedEvent = options.verbose
+			? event
+			: sanitizeSandboxSearchStreamEventForNonTTY(event);
+		if (renderedEvent) {
+			console.log(JSON.stringify(renderedEvent));
+		}
 		return { renderedText: false, renderedActivity: false };
 	}
 
@@ -153,6 +158,107 @@ export function renderSandboxSearchStreamEvent(
 		case "done":
 			return { renderedText: false, renderedActivity: false };
 	}
+}
+
+function sanitizeSandboxSearchStreamEventForNonTTY(
+	event: SandboxSearchStreamEvent,
+): Record<string, unknown> | null {
+	switch (event.type) {
+		case "job":
+		case "status":
+		case "error":
+		case "done":
+			return event;
+		case "result":
+			return {
+				type: "result",
+				jobId: event.jobId,
+				payload: sanitizeSandboxResultPayload(event.payload, {
+					omitRawOutput: true,
+				}),
+			};
+		case "opencode":
+			return sanitizeSandboxOpencodeEventForNonTTY(event);
+	}
+}
+
+function sanitizeSandboxOpencodeEventForNonTTY(
+	event: Extract<SandboxSearchStreamEvent, { type: "opencode" }>,
+): Record<string, unknown> | null {
+	const streamFields =
+		typeof event.stream === "string" ? { stream: event.stream } : {};
+	const structuredEvent = summarizeStructuredOpencodeEventForNonTTY(
+		event.event,
+	);
+	if (structuredEvent) {
+		return {
+			type: "opencode",
+			...streamFields,
+			event: structuredEvent,
+		};
+	}
+
+	const renderedLine = sanitizeOpencodeLine(event.line);
+	if (renderedLine === null) {
+		return null;
+	}
+
+	return {
+		type: "opencode",
+		...streamFields,
+		line: renderedLine,
+	};
+}
+
+function summarizeStructuredOpencodeEventForNonTTY(
+	value: unknown,
+): Record<string, unknown> | null {
+	if (!value || typeof value !== "object") {
+		return null;
+	}
+
+	const record = value as Record<string, unknown>;
+	const eventType = typeof record.type === "string" ? record.type : null;
+
+	if (eventType === "step_start" || eventType === "step_finish") {
+		return null;
+	}
+
+	if (eventType === "tool_use") {
+		const toolSummary = formatOpencodeToolUse(record);
+		const tool = extractOpencodeToolName(record);
+		if (!toolSummary && !tool) {
+			return null;
+		}
+
+		return {
+			type: "tool_use",
+			...(tool ? { tool } : {}),
+			...(toolSummary ? { summary: toolSummary } : {}),
+		};
+	}
+
+	if (eventType === "error") {
+		const message = extractOpencodeErrorMessage(record);
+		if (!message) {
+			return { type: "error" };
+		}
+
+		return {
+			type: "error",
+			message,
+		};
+	}
+
+	const extractedText = extractOpencodeDisplayText(record);
+	if (extractedText) {
+		return {
+			type: "text",
+			text: extractedText,
+		};
+	}
+
+	return eventType ? { type: eventType } : null;
 }
 
 function renderStructuredOpencodeEvent(
@@ -351,10 +457,7 @@ function extractOpencodeDisplayText(value: unknown): string | null {
 }
 
 function formatOpencodeToolUse(value: Record<string, unknown>): string | null {
-	const part =
-		typeof value.part === "object" && value.part !== null
-			? (value.part as Record<string, unknown>)
-			: null;
+	const part = extractOpencodePart(value);
 	const state =
 		typeof part?.state === "object" && part.state !== null
 			? (part.state as Record<string, unknown>)
@@ -385,6 +488,25 @@ function formatOpencodeToolUse(value: Record<string, unknown>): string | null {
 	return title
 		? `Tool ${toolName}: ${title}${suffix}`
 		: `Tool ${toolName}${suffix}`;
+}
+
+function extractOpencodeToolName(
+	value: Record<string, unknown>,
+): string | null {
+	const part = extractOpencodePart(value);
+	if (typeof part?.tool === "string" && part.tool.trim().length > 0) {
+		return part.tool.trim();
+	}
+
+	return null;
+}
+
+function extractOpencodePart(
+	value: Record<string, unknown>,
+): Record<string, unknown> | null {
+	return typeof value.part === "object" && value.part !== null
+		? (value.part as Record<string, unknown>)
+		: null;
 }
 
 function extractToolInputSummary(
@@ -446,6 +568,117 @@ function extractOpencodeErrorMessage(
 	);
 }
 
+export function sanitizeSandboxResultPayload(
+	payload: Record<string, unknown>,
+	options: { omitRawOutput?: boolean } = {},
+): Record<string, unknown> {
+	const result =
+		typeof payload.result === "object" && payload.result !== null
+			? { ...(payload.result as Record<string, unknown>) }
+			: null;
+
+	if (!result) {
+		return payload;
+	}
+
+	const cleanedAnswerFromAnswer = extractSandboxAnswerFromTranscript(
+		result.answer,
+	);
+	const cleanedAnswerFromRawOutput = extractSandboxAnswerFromTranscript(
+		result.rawOutput,
+	);
+
+	if (options.omitRawOutput !== false) {
+		delete result.rawOutput;
+	}
+
+	if (cleanedAnswerFromAnswer) {
+		result.answer = cleanedAnswerFromAnswer;
+	} else if (
+		typeof result.answer !== "string" ||
+		result.answer.trim().length === 0
+	) {
+		if (cleanedAnswerFromRawOutput) {
+			result.answer = cleanedAnswerFromRawOutput;
+		}
+	} else if (
+		typeof result.answer === "string" &&
+		looksLikeSandboxTranscript(result.answer)
+	) {
+		if (cleanedAnswerFromRawOutput) {
+			result.answer = cleanedAnswerFromRawOutput;
+		} else {
+			delete result.answer;
+		}
+	}
+
+	return {
+		...payload,
+		result,
+	};
+}
+
+export function extractSandboxAnswerFromTranscript(
+	value: unknown,
+): string | null {
+	if (typeof value !== "string" || !looksLikeSandboxTranscript(value)) {
+		return null;
+	}
+
+	const parts: string[] = [];
+	for (const rawLine of value.split(/\r?\n/)) {
+		const line = rawLine.trim();
+		if (!line.startsWith("{")) {
+			continue;
+		}
+
+		try {
+			const parsed = JSON.parse(line) as Record<string, unknown>;
+			const extracted = extractOpencodeTextPart(parsed);
+			if (extracted) {
+				parts.push(extracted);
+			}
+		} catch {
+			// Ignore non-JSON transcript lines.
+		}
+	}
+
+	if (parts.length === 0) {
+		return null;
+	}
+
+	return parts.join("\n").trim();
+}
+
+function extractOpencodeTextPart(
+	event: Record<string, unknown>,
+): string | null {
+	if (event.type === "text") {
+		if (typeof event.text === "string" && event.text.trim().length > 0) {
+			return event.text;
+		}
+		const part = extractOpencodePart(event);
+		if (typeof part?.text === "string" && part.text.trim().length > 0) {
+			return part.text;
+		}
+		if (typeof part?.content === "string" && part.content.trim().length > 0) {
+			return part.content;
+		}
+	}
+
+	return null;
+}
+
+function looksLikeSandboxTranscript(value: string): boolean {
+	return (
+		value.includes("opencode run --model") ||
+		value.includes("__NIA_PTY_EXIT__") ||
+		value.includes('"type":"step_start"') ||
+		value.includes('"type":"tool_use"') ||
+		value.includes('"type":"text"')
+	);
+}
+
 function sanitizeOpencodeLine(line: string | undefined): string | null {
 	if (typeof line !== "string") {
 		return null;
@@ -459,6 +692,9 @@ function sanitizeOpencodeLine(line: string | undefined): string | null {
 		return null;
 	}
 	if (looksLikeShellBootstrap(strippedLine)) {
+		return null;
+	}
+	if (looksLikeOpencodeLogLine(strippedLine)) {
 		return null;
 	}
 	if (strippedLine === "__NIA_PTY_EXIT__:0") {
@@ -475,6 +711,10 @@ function looksLikeShellBootstrap(line: string): boolean {
 		line.includes("base64 -d >") ||
 		line.startsWith("%")
 	);
+}
+
+function looksLikeOpencodeLogLine(line: string): boolean {
+	return /^\s*(INFO|WARN|DEBUG|ERROR|TRACE)\s+\d{4}-\d{2}-\d{2}/.test(line);
 }
 
 function looksLikeOpencodeProtocolJson(line: string): boolean {

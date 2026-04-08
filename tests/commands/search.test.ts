@@ -836,6 +836,63 @@ describe("search commands", () => {
 			expect(plainStdout).not.toContain("rawOutput");
 		});
 
+		test("sanitizes --no-stream sandbox output when stdout is not a TTY", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+			mockSandboxSearchPost.mockImplementationOnce(() =>
+				Promise.resolve({
+					data: {
+						workspaceKind: "git_repository",
+						job: {
+							id: "sandbox-job-nostream",
+							status: "completed",
+							query: "Explain the release process",
+							createdAt: new Date(),
+							completedAt: new Date(),
+						},
+						result: {
+							answer:
+								'stty -echo; printf hello\n{"type":"text","text":"Clean answer"}\n__NIA_PTY_EXIT__:0',
+							rawOutput:
+								'stty -echo; printf hello\n{"type":"text","text":"Clean answer"}\n__NIA_PTY_EXIT__:0',
+							command: "opencode",
+							exitCode: 0,
+							workspacePath: "/workspace",
+							volumeName: null,
+							cacheSubpath: null,
+						},
+					},
+					error: null,
+					status: 200,
+				}),
+			);
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const { stdout, stderr } = await captureCommandOutput(
+				() =>
+					searchCommand.execute({
+						argv: [
+							"sandbox",
+							"--no-stream",
+							"-r",
+							"https://github.com/acme/widget",
+							"Explain the release process",
+						],
+					}),
+				{ stdoutTTY: false },
+			);
+
+			expect(stderr).toBe("");
+			expect(stdout).toContain("Clean answer");
+			expect(stdout).not.toContain("rawOutput");
+			expect(stdout).not.toContain("stty -echo");
+			expect(stdout).not.toContain("__NIA_PTY_EXIT__");
+		});
+
 		test("keeps sandbox streaming output as JSON lines when stdout is not a TTY", async () => {
 			await writeConfig({
 				apiKey: "nia_test_search_key",
@@ -843,6 +900,69 @@ describe("search commands", () => {
 				useExperimentalApi: false,
 				output: undefined,
 			});
+			mockFetch.mockImplementationOnce(() =>
+				Promise.resolve(
+					createSseResponse([
+						{ type: "job", jobId: "sandbox-job-stream" },
+						{
+							type: "status",
+							jobStatus: "running",
+							runtimeStatus: "ready",
+						},
+						{
+							type: "opencode",
+							stream: "stdout",
+							line: "stty -echo; printf '%s' 'abc' | base64 -d > /tmp/opencode.json",
+						},
+						{
+							type: "opencode",
+							stream: "stdout",
+							line: "INFO  2026-04-05T00:28:25 +8ms service=models.dev file={} refreshing",
+						},
+						{
+							type: "opencode",
+							stream: "stdout",
+							line: '{"type":"step_start"}',
+							event: { type: "step_start" },
+						},
+						{
+							type: "opencode",
+							stream: "stdout",
+							line: '{"type":"tool_use"}',
+							event: {
+								type: "tool_use",
+								part: {
+									tool: "read",
+									state: {
+										status: "completed",
+										input: { filePath: "/workspace/AGENTS.md" },
+									},
+								},
+							},
+						},
+						{
+							type: "opencode",
+							stream: "stdout",
+							line: '{"type":"text","text":"Sandbox stream answer"}',
+							event: { type: "text", text: "Sandbox stream answer" },
+						},
+						{
+							type: "result",
+							jobId: "sandbox-job-stream",
+							payload: {
+								workspaceKind: "git_repository",
+								result: {
+									answer:
+										'{"type":"tool_use","part":{"tool":"read"}}\n{"type":"text","text":"Sandbox stream answer"}\n__NIA_PTY_EXIT__:0',
+									rawOutput:
+										'stty -echo; printf hello\n{"type":"text","text":"Sandbox stream answer"}\n__NIA_PTY_EXIT__:0',
+								},
+							},
+						},
+						{ type: "done" },
+					]),
+				),
+			);
 
 			const { searchCommand } = await import("../../src/commands/search.ts");
 			const { stdout, stderr } = await captureCommandOutput(
@@ -861,7 +981,7 @@ describe("search commands", () => {
 				.trim()
 				.split("\n")
 				.filter((line) => line.length > 0)
-				.map((line) => JSON.parse(line) as { type: string });
+				.map((line) => JSON.parse(line) as Record<string, unknown>);
 
 			expect(stderr).toBe("");
 			expect(events.map((event) => event.type)).toEqual([
@@ -869,13 +989,40 @@ describe("search commands", () => {
 				"status",
 				"opencode",
 				"opencode",
-				"opencode",
-				"opencode",
-				"opencode",
 				"result",
 				"done",
 			]);
+			expect(events[2]).toEqual({
+				type: "opencode",
+				stream: "stdout",
+				event: {
+					type: "tool_use",
+					tool: "read",
+					summary: "Tool read: /workspace/AGENTS.md",
+				},
+			});
+			expect(events[3]).toEqual({
+				type: "opencode",
+				stream: "stdout",
+				event: {
+					type: "text",
+					text: "Sandbox stream answer",
+				},
+			});
+			expect(events[4]).toEqual({
+				type: "result",
+				jobId: "sandbox-job-stream",
+				payload: {
+					workspaceKind: "git_repository",
+					result: {
+						answer: "Sandbox stream answer",
+					},
+				},
+			});
 			expect(stdout).not.toContain("Step started.");
+			expect(stdout).not.toContain("stty -echo");
+			expect(stdout).not.toContain("INFO  2026-04-05");
+			expect(stdout).not.toContain("rawOutput");
 		});
 
 		test("fetches a sandbox job by id under sandbox job", async () => {
