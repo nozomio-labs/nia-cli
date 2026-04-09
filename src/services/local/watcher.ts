@@ -21,6 +21,11 @@ export class LocalFolderWatcher {
 		try {
 			const watcher = chokidar.watch(folderPath, {
 				ignoreInitial: true,
+				// Skip directories the user can't read (TCC-protected paths like
+				// ~/Library/Calendars even when Full Disk Access is granted to
+				// the parent process — chokidar would otherwise log a torrent of
+				// EPERM lstat errors and pollute the LaunchAgent stderr log).
+				ignorePermissionErrors: true,
 				awaitWriteFinish: {
 					stabilityThreshold: 500,
 					pollInterval: 100,
@@ -42,6 +47,10 @@ export class LocalFolderWatcher {
 			watcher.on("add", trigger);
 			watcher.on("change", trigger);
 			watcher.on("unlink", trigger);
+			// Swallow chokidar error events so a single unreadable directory
+			// (EPERM/ENOENT) doesn't kill the watcher or spam stderr. The
+			// fallback periodic sync still picks up changes from sibling dirs.
+			watcher.on("error", () => {});
 
 			this.watchers.set(sourceId, watcher);
 			return true;

@@ -15,6 +15,11 @@ import type {
 	LocalSourceStatus,
 } from "../services/local/types.ts";
 import { LocalFolderWatcher } from "../services/local/watcher.ts";
+import {
+	installWatcher,
+	uninstallWatcher,
+	watcherStatus,
+} from "../services/local/watcher-install.ts";
 import { withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
 
@@ -84,9 +89,13 @@ export function buildLocalSourceStatuses(
 }
 
 function filterFolderSources(sources: LocalSource[]): LocalSource[] {
-	return sources.filter(
-		(source) => !source.detected_type || source.detected_type === TYPE_FOLDER,
-	);
+	// Sync handles two extraction paths:
+	//   - detected_type === "folder" (or unset): generic directory walker
+	//   - detected_type === <connector key>: SQLite extractor (Apple Notes,
+	//     Books, Anki, Screen Time, etc.) via the bun:sqlite path in extractor.ts
+	// Both paths are dispatched in syncLocalSource, so we no longer filter
+	// SQLite/personal-data sources out here.
+	return sources.filter((source) => Boolean(source.detected_type));
 }
 
 function isReadySource(source: LocalSource): boolean {
@@ -379,6 +388,79 @@ const watchCommand = app
 		});
 	});
 
+const installWatcherCommand = app
+	.sub("install-watcher")
+	.meta({
+		description:
+			"Install a macOS LaunchAgent that runs `nia local watch` at every login and auto-restarts on crash. After this, your local sources stay fresh in the background without you running anything.",
+	})
+	.flags({
+		"nia-path": {
+			type: "string",
+			description: "Override path to the `nia` binary (default: `which nia`)",
+		},
+		"debounce-ms": {
+			type: "number",
+			description: "Debounce window for file changes (default: 2000)",
+		},
+		"refresh-seconds": {
+			type: "number",
+			description: "Refresh source list interval (default: 30)",
+		},
+		"fallback-seconds": {
+			type: "number",
+			description: "Fallback sync interval (default: 600)",
+		},
+	})
+	.run(async ({ flags }) => {
+		const fmt = createOutput({ color: flags.color });
+		await withErrorHandling({ domain: "Watcher install" }, async () => {
+			const result = await installWatcher({
+				apiKey: flags["api-key"],
+				niaBinaryPath: flags["nia-path"],
+				debounceMs: flags["debounce-ms"],
+				refreshSeconds: flags["refresh-seconds"],
+				fallbackSeconds: flags["fallback-seconds"],
+			});
+			fmt.output({
+				stage: "installed",
+				...result,
+				next_commands: [
+					"nia local watcher-status",
+					"tail -f ~/Library/Logs/nia/watch.err.log",
+					"nia local uninstall-watcher",
+				],
+			});
+		});
+	});
+
+const uninstallWatcherCommand = app
+	.sub("uninstall-watcher")
+	.meta({
+		description:
+			"Stop and remove the `nia local watch` LaunchAgent installed by `install-watcher`.",
+	})
+	.run(async ({ flags }) => {
+		const fmt = createOutput({ color: flags.color });
+		await withErrorHandling({ domain: "Watcher uninstall" }, async () => {
+			const result = uninstallWatcher();
+			fmt.output({ stage: "uninstalled", ...result });
+		});
+	});
+
+const watcherStatusCommand = app
+	.sub("watcher-status")
+	.meta({
+		description:
+			"Show the status of the `nia local watch` LaunchAgent (loaded, pid, last exit, log tail).",
+	})
+	.run(async ({ flags }) => {
+		const fmt = createOutput({ color: flags.color });
+		await withErrorHandling({ domain: "Watcher status" }, async () => {
+			fmt.output(watcherStatus());
+		});
+	});
+
 export const localCommand = annotate(
 	app
 		.sub("local")
@@ -388,10 +470,14 @@ export const localCommand = annotate(
 		.command(linkCommand)
 		.command(removeCommand)
 		.command(syncCommand)
-		.command(watchCommand),
+		.command(watchCommand)
+		.command(installWatcherCommand)
+		.command(uninstallWatcherCommand)
+		.command(watcherStatusCommand),
 	[
 		"Use `nia local add <path>` to register a folder and `nia local sync` for a one-time push.",
 		"Use `nia local watch` to keep linked folders synced continuously.",
+		"Run `nia local install-watcher` once to start `nia local watch` automatically at every login via a macOS LaunchAgent — this is the 'fire and forget' background sync mode for keeping vaults fresh.",
 		"Target a source by full ID or a unique ID prefix for link, remove, sync, and watch.",
 	],
 );

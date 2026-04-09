@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { type Dirent, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type {
 	FolderCursor,
@@ -396,9 +396,16 @@ function walkFolder(
 		return;
 	}
 
-	const entries = readdirSync(currentPath, { withFileTypes: true }).sort(
-		(a, b) => a.name.localeCompare(b.name),
-	);
+	let entries: Dirent[];
+	try {
+		entries = readdirSync(currentPath, { withFileTypes: true }).sort((a, b) =>
+			a.name.localeCompare(b.name),
+		);
+	} catch {
+		skippedCounts.permission_denied =
+			(skippedCounts.permission_denied ?? 0) + 1;
+		return;
+	}
 
 	for (const entry of entries) {
 		if (files.length >= limit) {
@@ -485,6 +492,328 @@ function walkFolder(
 			}
 		} catch {}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Generic SQLite extraction
+//
+// Mirrors what the backend's `extract_generic` does (db_extractor.py:1358) but
+// runs client-side. Walks all tables in any SQLite file, finds TEXT columns,
+// emits one virtual file per row. Used for personal-data sources where we
+// don't have (or don't need) a dedicated extractor: Apple Notes, Reminders,
+// Contacts, Books, Podcasts, Anki, Day One, Bear, Things, OmniFocus,
+// Photos.sqlite, knowledgeC.db (Screen Time), Significant Locations, etc.
+//
+// Uses Bun's built-in `bun:sqlite` (no extra dependencies). Opens the file
+// read-only and copies it to a temp location first to avoid lock contention
+// when the source app is running (Chrome holds History.db open, etc.).
+//
+// Some macOS personal-data sources sit at directory paths that contain a
+// nested SQLite (e.g. Reminders, Contacts, Books library). The extractor
+// also accepts a directory path and recursively finds the first .sqlite /
+// .db / .abcddb file inside.
+// ---------------------------------------------------------------------------
+
+const SQLITE_MAX_ROWS_PER_TABLE = 5_000;
+const SQLITE_MAX_TOTAL_ROWS = 50_000;
+
+// Internal SQLite tables to skip (FTS index shadow tables, etc.)
+const SQLITE_SKIP_TABLE_PATTERNS = [
+	/^sqlite_/, // sqlite_master, sqlite_sequence, sqlite_stat*
+	/_fts_/, // FTS shadow tables
+	/_fts$/,
+	/_idx$/,
+	/_data$/,
+	/_config$/,
+	/_docsize$/,
+	/_segdir$/,
+	/_segments$/,
+];
+
+const SQLITE_FILE_EXTENSIONS = [
+	".sqlite",
+	".sqlite3",
+	".db",
+	".abcddb", // Apple AddressBook
+	".storedata", // CoreData
+];
+
+function findSqliteInDir(dir: string, maxDepth = 4): string | null {
+	if (maxDepth < 0) return null;
+	let entries: string[];
+	try {
+		entries = readdirSync(dir);
+	} catch {
+		return null;
+	}
+	// Files first
+	for (const name of entries) {
+		const full = path.join(dir, name);
+		try {
+			const st = statSync(full);
+			if (st.isFile()) {
+				const ext = path.extname(name).toLowerCase();
+				if (SQLITE_FILE_EXTENSIONS.includes(ext)) return full;
+			}
+		} catch {
+			// skip
+		}
+	}
+	// Then recurse
+	for (const name of entries) {
+		const full = path.join(dir, name);
+		try {
+			const st = statSync(full);
+			if (st.isDirectory() && !SKIP_DIRS.has(name)) {
+				const found = findSqliteInDir(full, maxDepth - 1);
+				if (found) return found;
+			}
+		} catch {
+			// skip
+		}
+	}
+	return null;
+}
+
+function safeTableName(name: string): string {
+	return name.replace(/[^\w\-_]/g, "_");
+}
+
+function shouldSkipTable(name: string): boolean {
+	for (const pattern of SQLITE_SKIP_TABLE_PATTERNS) {
+		if (pattern.test(name)) return true;
+	}
+	return false;
+}
+
+export interface SqliteExtractionOptions {
+	maxRowsPerTable?: number;
+	maxTotalRows?: number;
+}
+
+export function extractSqliteSource(
+	sourcePath: string,
+	connectorKey: string,
+	options: SqliteExtractionOptions = {},
+): SyncExtractionResult {
+	const maxRowsPerTable = options.maxRowsPerTable ?? SQLITE_MAX_ROWS_PER_TABLE;
+	const maxTotalRows = options.maxTotalRows ?? SQLITE_MAX_TOTAL_ROWS;
+
+	// Resolve to an actual SQLite file. Some sources point at a directory
+	// (Apple Reminders, Contacts, Books library, etc.) — walk for the first
+	// .sqlite / .db / .abcddb / .storedata.
+	let dbPath = path.resolve(sourcePath);
+	let isDir = false;
+	try {
+		isDir = statSync(dbPath).isDirectory();
+	} catch {
+		// not found — return empty
+		return {
+			files: [],
+			cursor: {},
+			stats: {
+				db_type: connectorKey,
+				skipped: 0,
+				error: `path does not exist: ${sourcePath}`,
+			},
+		};
+	}
+	if (isDir) {
+		const found = findSqliteInDir(dbPath);
+		if (!found) {
+			return {
+				files: [],
+				cursor: {},
+				stats: {
+					db_type: connectorKey,
+					skipped: 0,
+					error: `no SQLite file found under ${sourcePath} (searched 4 levels deep for .sqlite / .db / .abcddb / .storedata)`,
+				},
+			};
+		}
+		dbPath = found;
+	}
+
+	// Copy to a temp location to dodge file locks (Chrome History.db, etc.).
+	// Bun: import fs from "node:fs" + use copyFileSync.
+	// We use a per-source temp file path keyed off connectorKey + mtime so the
+	// copy is reproducible across runs and we don't accumulate temp files.
+	const fs = require("node:fs") as typeof import("node:fs");
+	const os = require("node:os") as typeof import("node:os");
+	const tempDir = path.join(os.tmpdir(), "nia-personal-sqlite");
+	try {
+		fs.mkdirSync(tempDir, { recursive: true });
+	} catch {
+		// best effort
+	}
+	let copiedPath: string;
+	try {
+		const stat = fs.statSync(dbPath);
+		copiedPath = path.join(
+			tempDir,
+			`${connectorKey}-${stat.mtimeMs.toFixed(0)}-${path.basename(dbPath)}`,
+		);
+		// Only copy if the cached one doesn't exist yet for this mtime.
+		if (!fs.existsSync(copiedPath)) {
+			fs.copyFileSync(dbPath, copiedPath);
+		}
+	} catch (err) {
+		return {
+			files: [],
+			cursor: {},
+			stats: {
+				db_type: connectorKey,
+				error: `failed to copy SQLite file: ${err instanceof Error ? err.message : String(err)}`,
+			},
+		};
+	}
+
+	// Open the copy with bun:sqlite. Read-only mode for safety.
+	let Database: typeof import("bun:sqlite").Database;
+	try {
+		const mod = require("bun:sqlite") as {
+			Database: typeof import("bun:sqlite").Database;
+		};
+		Database = mod.Database;
+	} catch (err) {
+		return {
+			files: [],
+			cursor: {},
+			stats: {
+				db_type: connectorKey,
+				error: `bun:sqlite not available: ${err instanceof Error ? err.message : String(err)}`,
+			},
+		};
+	}
+
+	let db: import("bun:sqlite").Database;
+	try {
+		db = new Database(copiedPath, { readonly: true });
+	} catch (err) {
+		return {
+			files: [],
+			cursor: {},
+			stats: {
+				db_type: connectorKey,
+				error: `failed to open SQLite: ${err instanceof Error ? err.message : String(err)}`,
+			},
+		};
+	}
+
+	const files: LocalFileItem[] = [];
+	let totalExtracted = 0;
+	let tablesScanned = 0;
+	let tablesSkipped = 0;
+
+	try {
+		// List all tables.
+		const tableRows = db
+			.query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+			.all() as Array<{ name: string }>;
+
+		for (const { name: tableName } of tableRows) {
+			if (totalExtracted >= maxTotalRows) break;
+			if (shouldSkipTable(tableName)) {
+				tablesSkipped++;
+				continue;
+			}
+			tablesScanned++;
+
+			// Discover columns.
+			let columns: Array<{ cid: number; name: string; type: string }>;
+			try {
+				columns = db
+					.query(`PRAGMA table_info("${tableName.replace(/"/g, '""')}")`)
+					.all() as Array<{ cid: number; name: string; type: string }>;
+			} catch {
+				continue;
+			}
+			if (columns.length === 0) continue;
+
+			// Find TEXT-ish columns (TEXT, VARCHAR, CHAR, CLOB, NVARCHAR, etc.)
+			const textCols = columns
+				.filter((c) => {
+					const t = (c.type || "").toUpperCase();
+					return (
+						t.includes("TEXT") ||
+						t.includes("CHAR") ||
+						t.includes("CLOB") ||
+						t === ""
+					);
+				})
+				.map((c) => c.name);
+			if (textCols.length === 0) continue;
+
+			// Pick a primary key column for row identification (or rowid fallback).
+			const pkCol =
+				columns.find((c) => (c as { pk?: number }).pk === 1)?.name ?? "rowid";
+
+			const remaining = maxTotalRows - totalExtracted;
+			const limit = Math.min(remaining, maxRowsPerTable);
+
+			const selectCols = [
+				`"${pkCol.replace(/"/g, '""')}" AS __nia_pk`,
+				...textCols.map((c) => `"${c.replace(/"/g, '""')}" AS "${c}"`),
+			].join(", ");
+
+			let rows: Array<Record<string, unknown>>;
+			try {
+				rows = db
+					.query(
+						`SELECT ${selectCols} FROM "${tableName.replace(/"/g, '""')}" LIMIT ${limit}`,
+					)
+					.all() as Array<Record<string, unknown>>;
+			} catch {
+				continue;
+			}
+
+			for (const row of rows) {
+				const pkValue = row.__nia_pk;
+				const parts: string[] = [];
+				for (const col of textCols) {
+					const v = row[col];
+					if (typeof v === "string" && v.trim().length > 0) {
+						parts.push(`${col}: ${v}`);
+					}
+				}
+				if (parts.length === 0) continue;
+				const content = parts.join("\n");
+
+				const safeTable = safeTableName(tableName);
+				files.push({
+					path: `${safeTable}/row_${String(pkValue ?? totalExtracted)}.txt`,
+					content,
+					metadata: {
+						source_type: "local_folder",
+						source_subtype: "database",
+						db_type: connectorKey,
+						table: tableName,
+						row_id: pkValue,
+					},
+				});
+				totalExtracted++;
+				if (totalExtracted >= maxTotalRows) break;
+			}
+		}
+	} finally {
+		try {
+			db.close();
+		} catch {
+			// ignore
+		}
+	}
+
+	return {
+		files,
+		cursor: {},
+		stats: {
+			db_type: connectorKey,
+			extracted: totalExtracted,
+			tables_scanned: tablesScanned,
+			tables_skipped: tablesSkipped,
+			source_path: dbPath,
+		},
+	};
 }
 
 export function extractFolderIncremental(
