@@ -70,6 +70,41 @@ function validateIndexUrl(url: string): string {
 	}
 }
 
+/**
+ * Resolve a positional path argument that might begin with a `-`.
+ *
+ * crustjs uses Node's `util.parseArgs` under the hood, which treats anything
+ * starting with `-` as a flag — so positional paths like Claude Code session
+ * file names (`-Users-arlanrakhmetzhanov-Developer-nia-app/sessions-index.json`)
+ * fail to parse with "Missing required argument" before our `.run` handler
+ * gets a chance to read them.
+ *
+ * The POSIX-standard escape hatch is `--`: everything after `--` is treated
+ * as a raw positional. Node's parser respects this and crustjs surfaces the
+ * raw values as `rawArgs`. We use a permissive (`required: false`) schema
+ * so the parser doesn't error, then prefer `args[name]` (the normal path)
+ * and fall back to `rawArgs[index]` for the `--` path.
+ *
+ * Throws a friendly error showing both calling conventions when neither is
+ * present.
+ */
+function resolvePathArg(
+	primary: string | undefined,
+	rawArgs: readonly string[] | undefined,
+	name: string,
+	rawIndex = 0,
+): string {
+	const value = primary ?? rawArgs?.[rawIndex];
+	if (!value) {
+		throw new Error(
+			`${name} is required.\n` +
+				`  Standard: nia sources <cmd> <id> /concepts/foo.md\n` +
+				`  For paths beginning with \`-\`: nia sources <cmd> <id> -- -Users-arlan/sessions-index.json`,
+		);
+	}
+	return value;
+}
+
 async function resolveIndexUrl(url: string | undefined): Promise<string> {
 	if (url) {
 		return validateIndexUrl(url);
@@ -573,10 +608,16 @@ const readCommand = app
 			required: true,
 		},
 		{
+			// Marked optional at the schema level so users can pass paths
+			// that begin with `-` (e.g. Claude Code session files like
+			// `-Users-arlanrakhmetzhanov-...`) via the POSIX `--` separator
+			// without crustjs erroring out before we can read rawArgs.
+			// Validated at runtime with a helpful error message via
+			// resolvePathArg().
 			name: "path",
 			type: "string",
-			description: "File path within the source",
-			required: true,
+			description:
+				"File path within the source. For paths beginning with `-`, pass after `--`: `nia sources read <id> -- -Users-arlan/sessions-index.json`",
 		},
 	] as const)
 	.flags({
@@ -598,15 +639,17 @@ const readCommand = app
 				"Source type hint: repository, documentation, research_paper, huggingface_dataset",
 		},
 	})
-	.run(async ({ args, flags }) => {
+	.run(async ({ args, flags, rawArgs }) => {
 		const fmt = createOutput({ color: flags.color });
 
 		validateSourceType(flags.type);
 
+		const filePath = resolvePathArg(args.path, rawArgs, "path");
+
 		await withErrorHandling({ domain: "Source" }, async () => {
 			const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
 			const result = await cliSdk.sources.content(args.id, {
-				path: args.path,
+				path: filePath,
 				lineStart: flags["line-start"] ?? undefined,
 				lineEnd: flags["line-end"] ?? undefined,
 				maxLength: flags["max-length"] ?? undefined,
@@ -924,10 +967,11 @@ const writeCommand = app
 			required: true,
 		},
 		{
+			// See resolvePathArg() for the rationale on omitting `required`.
 			name: "path",
 			type: "string",
-			description: "File path within the source",
-			required: true,
+			description:
+				"File path within the source. For paths beginning with `-`, pass after `--`.",
 		},
 	] as const)
 	.flags({
@@ -948,13 +992,15 @@ const writeCommand = app
 			description: "Programming language hint",
 		},
 	})
-	.run(async ({ args, flags }) => {
+	.run(async ({ args, flags, rawArgs }) => {
 		const fmt = createOutput({ color: flags.color });
 
 		if (!flags.body && !flags.file) {
 			fmt.error("Provide either --body or --file to specify file content.");
 			process.exit(1);
 		}
+
+		const filePath = resolvePathArg(args.path, rawArgs, "path");
 
 		await withErrorHandling({ domain: "Source" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -969,7 +1015,7 @@ const writeCommand = app
 			}
 
 			const body: Record<string, unknown> = {
-				path: args.path,
+				path: filePath,
 				body: content,
 			};
 			if (flags.encoding) {
@@ -1008,20 +1054,23 @@ const mvCommand = app
 			required: true,
 		},
 		{
+			// See resolvePathArg() for the rationale on omitting `required`.
 			name: "old-path",
 			type: "string",
-			description: "Current file path within the source",
-			required: true,
+			description:
+				"Current file path. For paths beginning with `-`, pass both paths after `--`.",
 		},
 		{
 			name: "new-path",
 			type: "string",
 			description: "New file path within the source",
-			required: true,
 		},
 	] as const)
-	.run(async ({ args, flags }) => {
+	.run(async ({ args, flags, rawArgs }) => {
 		const fmt = createOutput({ color: flags.color });
+
+		const oldPath = resolvePathArg(args["old-path"], rawArgs, "old-path", 0);
+		const newPath = resolvePathArg(args["new-path"], rawArgs, "new-path", 1);
 
 		await withErrorHandling({ domain: "Source" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -1035,8 +1084,8 @@ const mvCommand = app
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify({
-					old_path: args["old-path"],
-					new_path: args["new-path"],
+					old_path: oldPath,
+					new_path: newPath,
 				}),
 			});
 
@@ -1060,14 +1109,17 @@ const mkdirCommand = app
 			required: true,
 		},
 		{
+			// See resolvePathArg() for the rationale on omitting `required`.
 			name: "path",
 			type: "string",
-			description: "Directory path to create within the source",
-			required: true,
+			description:
+				"Directory path to create. For paths beginning with `-`, pass after `--`.",
 		},
 	] as const)
-	.run(async ({ args, flags }) => {
+	.run(async ({ args, flags, rawArgs }) => {
 		const fmt = createOutput({ color: flags.color });
+
+		const dirPath = resolvePathArg(args.path, rawArgs, "path");
 
 		await withErrorHandling({ domain: "Source" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -1080,7 +1132,7 @@ const mkdirCommand = app
 					Authorization: `Bearer ${token}`,
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({ path: args.path }),
+				body: JSON.stringify({ path: dirPath }),
 			});
 
 			if (!response.ok) {
@@ -1103,14 +1155,17 @@ const rmCommand = app
 			required: true,
 		},
 		{
+			// See resolvePathArg() for the rationale on omitting `required`.
 			name: "path",
 			type: "string",
-			description: "File path to delete within the source",
-			required: true,
+			description:
+				"File path to delete. For paths beginning with `-`, pass after `--`.",
 		},
 	] as const)
-	.run(async ({ args, flags }) => {
+	.run(async ({ args, flags, rawArgs }) => {
 		const fmt = createOutput({ color: flags.color });
+
+		const filePath = resolvePathArg(args.path, rawArgs, "path");
 
 		await withErrorHandling({ domain: "Source" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -1118,7 +1173,7 @@ const rmCommand = app
 			const token = OpenAPI.TOKEN;
 
 			const response = await fetch(
-				`${baseUrl}/fs/${args.id}/files?path=${encodeURIComponent(args.path)}`,
+				`${baseUrl}/fs/${args.id}/files?path=${encodeURIComponent(filePath)}`,
 				{
 					method: "DELETE",
 					headers: {

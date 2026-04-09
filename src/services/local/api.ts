@@ -87,6 +87,7 @@ export async function listLocalSources(
 export async function addLocalSource(
 	path: string,
 	apiKey?: string,
+	options?: { detectedType?: string; displayName?: string },
 ): Promise<LocalSource> {
 	const result = await requestJson<unknown>({
 		apiKey,
@@ -94,7 +95,12 @@ export async function addLocalSource(
 		path: "/daemon/sources",
 		payload: {
 			path,
-			detected_type: "folder",
+			// Forward the detected_type to the daemon. Defaults to "folder" for
+			// generic directory sources; personal-data sources (iMessage, Apple
+			// Notes, Safari history, etc.) pass their specific connector key here
+			// so the backend's db_extractor.py knows which extractor to apply.
+			detected_type: options?.detectedType ?? "folder",
+			...(options?.displayName ? { display_name: options.displayName } : {}),
 		},
 	});
 

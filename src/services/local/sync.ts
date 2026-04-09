@@ -4,6 +4,7 @@ import path from "node:path";
 import { reportLocalSyncError, uploadLocalSyncBatch } from "./api.ts";
 import {
 	extractFolderIncremental,
+	extractSqliteSource,
 	FOLDER_CURSOR_VERSION,
 	normalizeFolderCursor,
 	TYPE_FOLDER,
@@ -12,6 +13,7 @@ import type {
 	FolderCursor,
 	LocalFileItem,
 	LocalSource,
+	SyncExtractionResult,
 	SyncResult,
 } from "./types.ts";
 
@@ -133,21 +135,52 @@ export async function syncLocalSource(
 		};
 	}
 
-	const normalized = normalizeFolderCursor(
-		sourcePath,
-		(source.cursor ?? {}) as Record<string, unknown>,
-	);
-	const extractorCursor = normalized.cursor;
-	const extraction = extractFolderIncremental(sourcePath, extractorCursor);
-	const nextCursor: FolderCursor = {
-		...extraction.cursor,
-		cursor_version: FOLDER_CURSOR_VERSION,
-		root_path: sourcePath,
-	};
+	const detectedType = (source.detected_type ?? TYPE_FOLDER).toLowerCase();
+	const isFolderMode = detectedType === TYPE_FOLDER || detectedType === "";
+
+	let extraction: SyncExtractionResult;
+	let nextCursor: FolderCursor;
+	let connectorType: string;
+	let extractorCursor: FolderCursor | undefined;
+	let resetReason: string | undefined;
+
+	try {
+		if (isFolderMode) {
+			const normalized = normalizeFolderCursor(
+				sourcePath,
+				(source.cursor ?? {}) as Record<string, unknown>,
+			);
+			extractorCursor = normalized.cursor;
+			resetReason = normalized.resetReason;
+			extraction = extractFolderIncremental(sourcePath, extractorCursor);
+			nextCursor = {
+				...extraction.cursor,
+				cursor_version: FOLDER_CURSOR_VERSION,
+				root_path: sourcePath,
+			};
+			connectorType = TYPE_FOLDER;
+		} else {
+			extraction = extractSqliteSource(sourcePath, detectedType);
+			nextCursor = {
+				cursor_version: FOLDER_CURSOR_VERSION,
+				root_path: sourcePath,
+			};
+			connectorType = detectedType;
+		}
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "Extraction failed";
+		await reportLocalSyncError(sourceId, message, sourcePath, options.apiKey);
+		return {
+			path: sourcePath,
+			status: "error",
+			error: message,
+		};
+	}
 
 	try {
 		if (extraction.files.length === 0) {
-			if (!cursorsEqual(extractorCursor, nextCursor)) {
+			if (isFolderMode && !cursorsEqual(extractorCursor, nextCursor)) {
 				await uploadWithRetry(
 					{
 						local_folder_id: sourceId,
@@ -155,7 +188,7 @@ export async function syncLocalSource(
 						cursor: nextCursor as unknown as Record<string, unknown>,
 						stats: extraction.stats,
 						is_final_batch: true,
-						connector_type: TYPE_FOLDER,
+						connector_type: connectorType,
 					},
 					options.apiKey,
 				);
@@ -173,8 +206,8 @@ export async function syncLocalSource(
 				path: sourcePath,
 				status: "success",
 				added: 0,
-				message: normalized.resetReason
-					? `No new data (cursor reset: ${normalized.resetReason})`
+				message: resetReason
+					? `No new data (cursor reset: ${resetReason})`
 					: "No new data",
 				new_cursor: nextCursor,
 			};
@@ -199,7 +232,7 @@ export async function syncLocalSource(
 						: {},
 					stats: isFinalBatch ? extraction.stats : {},
 					is_final_batch: isFinalBatch,
-					connector_type: TYPE_FOLDER,
+					connector_type: connectorType,
 					idempotency_key: `${sourceId}:${syncRunId}:b${index + 1}`,
 				},
 				options.apiKey,
