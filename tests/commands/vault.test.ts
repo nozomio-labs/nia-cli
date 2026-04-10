@@ -1,4 +1,13 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	mock,
+	test,
+} from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -49,7 +58,7 @@ describe("vault command helpers", () => {
 		const text = generateVaultAgentsMd("vault_abc", "My Life");
 		expect(text).toContain("## My Life Vault");
 		expect(text).toContain("id: `vault_abc`");
-		expect(text).toContain("The \"leave alone\" rule");
+		expect(text).toContain('The "leave alone" rule');
 	});
 
 	test("generateVaultSkillMd includes frontmatter and slugged name", () => {

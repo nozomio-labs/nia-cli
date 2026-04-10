@@ -553,7 +553,10 @@ nia vault info ${vaultId}     # poll workflow status
 \`\`\``;
 }
 
-export function generateVaultAgentsMd(vaultId: string, displayName: string): string {
+export function generateVaultAgentsMd(
+	vaultId: string,
+	displayName: string,
+): string {
 	const safe = displayName || "Nia";
 	return `## ${safe} Vault
 
@@ -569,7 +572,10 @@ ${generateVaultBashExamples(vaultId)}
 `;
 }
 
-export function generateVaultSkillMd(vaultId: string, displayName: string): string {
+export function generateVaultSkillMd(
+	vaultId: string,
+	displayName: string,
+): string {
 	const safe = displayName || "Nia";
 	const slug = vaultSlug(displayName);
 	return `---
@@ -602,7 +608,10 @@ When you write to a vault file from a bash session or via \`nia sources write\`,
 `;
 }
 
-export function generateVaultSetupMd(vaultId: string, displayName: string): string {
+export function generateVaultSetupMd(
+	vaultId: string,
+	displayName: string,
+): string {
 	const safe = displayName || "Nia";
 	const slug = vaultSlug(displayName);
 	return `# ${safe} Vault — Setup

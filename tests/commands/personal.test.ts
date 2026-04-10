@@ -19,9 +19,6 @@ describe("personal command helpers", () => {
 	});
 
 	test("parseEnableList drops empty connector values", () => {
-		expect(parseEnableList("notes,, ,safari, ")).toEqual([
-			"notes",
-			"safari",
-		]);
+		expect(parseEnableList("notes,, ,safari, ")).toEqual(["notes", "safari"]);
 	});
 });
