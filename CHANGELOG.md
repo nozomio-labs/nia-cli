@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.2.3
+
+### Patch Changes
+
+- Pin CI bun version to 1.3.11 to fix broken cross-compiled binaries (bun 1.3.12 produces hanging darwin-arm64 binaries)
+
 ## 0.2.2
 
 ### Patch Changes
