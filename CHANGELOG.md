@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.2.2
+
+### Patch Changes
+
+- Fix broken 0.2.1 binary that hangs on all commands
+
 ## 0.2.1
 
 ### Patch Changes
