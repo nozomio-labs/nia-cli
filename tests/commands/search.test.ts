@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+	afterAll,
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	mock,
+	test,
+} from "bun:test";
 import { rmSync } from "node:fs";
 import { formatWithOptions } from "node:util";
 import {
@@ -260,8 +268,18 @@ mock.module("@nozomioai/nia-sdk", () => ({
 
 mock.module("nia-ai-ts", () => ({
 	ApiError: class extends Error {
-		status = 500;
+		status: number;
 		body?: unknown;
+		constructor(
+			_request?: unknown,
+			response?: { status?: number; body?: unknown },
+			message?: string,
+		) {
+			super(message ?? "ApiError");
+			this.name = "ApiError";
+			this.status = response?.status ?? 500;
+			this.body = response?.body;
+		}
 	},
 	NiaSDK: class {
 		search = {
@@ -279,6 +297,9 @@ mock.module("nia-ai-ts", () => ({
 	},
 	NiaSDKError: class extends Error {},
 	NiaTimeoutError: class extends Error {},
+	V2ApiService: {
+		getUsageSummaryV2V2UsageGet: mock(() => Promise.resolve({})),
+	},
 	V2ApiDataSourcesService: {
 		readDocumentationFileV2V2DataSourcesSourceIdReadGet: mock(() =>
 			Promise.resolve({}),
@@ -403,6 +424,10 @@ describe("search commands", () => {
 			// Ignore
 		}
 		globalThis.fetch = originalFetch;
+	});
+
+	afterAll(() => {
+		mock.restore();
 	});
 
 	describe("universal search", () => {
