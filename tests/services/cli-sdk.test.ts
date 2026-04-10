@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+	afterAll,
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	mock,
+	test,
+} from "bun:test";
 import { rmSync } from "node:fs";
 
 const originalFetch = globalThis.fetch;
@@ -330,7 +338,11 @@ mock.module("nia-ai-ts", () => ({
 	ApiError: class extends Error {
 		status: number;
 		body?: unknown;
-		constructor(request?: unknown, response?: { status?: number; body?: unknown }, message?: string) {
+		constructor(
+			_request?: unknown,
+			response?: { status?: number; body?: unknown },
+			message?: string,
+		) {
 			super(message ?? "ApiError");
 			this.name = "ApiError";
 			this.status = response?.status ?? 500;

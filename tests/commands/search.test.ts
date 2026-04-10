@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+	afterAll,
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	mock,
+	test,
+} from "bun:test";
 import { rmSync } from "node:fs";
 import { formatWithOptions } from "node:util";
 import {
@@ -262,7 +270,11 @@ mock.module("nia-ai-ts", () => ({
 	ApiError: class extends Error {
 		status: number;
 		body?: unknown;
-		constructor(request?: unknown, response?: { status?: number; body?: unknown }, message?: string) {
+		constructor(
+			_request?: unknown,
+			response?: { status?: number; body?: unknown },
+			message?: string,
+		) {
 			super(message ?? "ApiError");
 			this.name = "ApiError";
 			this.status = response?.status ?? 500;
@@ -285,6 +297,9 @@ mock.module("nia-ai-ts", () => ({
 	},
 	NiaSDKError: class extends Error {},
 	NiaTimeoutError: class extends Error {},
+	V2ApiService: {
+		getUsageSummaryV2V2UsageGet: mock(() => Promise.resolve({})),
+	},
 	V2ApiDataSourcesService: {
 		readDocumentationFileV2V2DataSourcesSourceIdReadGet: mock(() =>
 			Promise.resolve({}),
