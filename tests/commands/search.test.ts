@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { formatWithOptions } from "node:util";
 import {
@@ -260,8 +260,14 @@ mock.module("@nozomioai/nia-sdk", () => ({
 
 mock.module("nia-ai-ts", () => ({
 	ApiError: class extends Error {
-		status = 500;
+		status: number;
 		body?: unknown;
+		constructor(request?: unknown, response?: { status?: number; body?: unknown }, message?: string) {
+			super(message ?? "ApiError");
+			this.name = "ApiError";
+			this.status = response?.status ?? 500;
+			this.body = response?.body;
+		}
 	},
 	NiaSDK: class {
 		search = {
@@ -403,6 +409,10 @@ describe("search commands", () => {
 			// Ignore
 		}
 		globalThis.fetch = originalFetch;
+	});
+
+	afterAll(() => {
+		mock.restore();
 	});
 
 	describe("universal search", () => {
