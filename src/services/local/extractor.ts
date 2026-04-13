@@ -6,6 +6,13 @@ import type {
 	SyncExtractionResult,
 } from "./types.ts";
 import { copySqliteToTemp, openSqliteFromCopy, cleanupTempCopy } from "./extractors/shared.ts";
+import { extractWhatsApp } from "./extractors/whatsapp.ts";
+import { extractNotes } from "./extractors/notes.ts";
+import { extractContacts } from "./extractors/contacts.ts";
+import { extractReminders } from "./extractors/reminders.ts";
+import { extractPodcasts } from "./extractors/podcasts.ts";
+import { extractPhotos } from "./extractors/photos.ts";
+import { extractScreenTime } from "./extractors/screentime.ts";
 
 export const TYPE_FOLDER = "folder";
 export const MAX_ROWS = 100_000;
@@ -633,6 +640,21 @@ export function extractSqliteSource(
 			};
 		}
 		dbPath = found;
+	}
+
+	const typedExtractors: Record<string, (p: string, c?: Record<string, unknown>) => SyncExtractionResult> = {
+		whatsapp: extractWhatsApp,
+		notes: extractNotes,
+		contacts: extractContacts,
+		reminders: extractReminders,
+		podcasts: extractPodcasts,
+		photos_metadata: extractPhotos,
+		screen_time: extractScreenTime,
+	};
+
+	const typedExtractor = typedExtractors[connectorKey];
+	if (typedExtractor) {
+		return typedExtractor(dbPath);
 	}
 
 	let copiedPath: string;
