@@ -651,7 +651,7 @@ export function extractSqliteSource(
 
 	let db: import("bun:sqlite").Database;
 	try {
-		db = openSqliteFromCopy(copiedPath, connectorKey);
+		db = openSqliteFromCopy(copiedPath);
 	} catch (err) {
 		cleanupTempCopy(copiedPath);
 		return {
@@ -765,6 +765,7 @@ export function extractSqliteSource(
 		} catch {
 			// ignore
 		}
+		cleanupTempCopy(copiedPath);
 	}
 
 	return {

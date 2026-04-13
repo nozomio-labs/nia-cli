@@ -45,7 +45,7 @@ export function copySqliteToTemp(dbPath: string, connectorKey: string): string {
   return copiedPath;
 }
 
-export function openSqliteFromCopy(copiedPath: string, _connectorKey: string): import("bun:sqlite").Database {
+export function openSqliteFromCopy(copiedPath: string): import("bun:sqlite").Database {
   const { Database } = require("bun:sqlite") as {
     Database: typeof import("bun:sqlite").Database;
   };
