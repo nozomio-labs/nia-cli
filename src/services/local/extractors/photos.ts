@@ -65,6 +65,15 @@ export function extractPhotos(
     const cursorModified = (cursor.last_modified_at as number) ?? 0;
     const cursorPk = (cursor.last_asset_pk as number) ?? 0;
 
+    // Discover which columns exist in ZADDITIONALASSETATTRIBUTES — schema
+    // varies across macOS versions (e.g. ZCAMERAMAKE may not exist on newer).
+    const aaColumns = new Set(
+      (db.query("PRAGMA table_info(ZADDITIONALASSETATTRIBUTES)").all() as Array<{ name: string }>)
+        .map((c) => c.name.toUpperCase()),
+    );
+    const aaCol = (col: string, alias: string) =>
+      aaColumns.has(col.toUpperCase()) ? `aa.${col} AS ${alias}` : `NULL AS ${alias}`;
+
     const rows = db
       .query(
         `SELECT
@@ -77,10 +86,10 @@ export function extractPhotos(
           a.ZWIDTH AS width,
           a.ZHEIGHT AS height,
           COALESCE(a.ZFAVORITE, 0) AS favorite,
-          aa.ZCAMERAMAKE AS camera_make,
-          aa.ZCAMERAMODEL AS camera_model,
-          aa.ZLENSMODEL AS lens_model,
-          aa.ZORIGINALFILESIZE AS original_file_size
+          ${aaCol("ZCAMERAMAKE", "camera_make")},
+          ${aaCol("ZCAMERAMODEL", "camera_model")},
+          ${aaCol("ZLENSMODEL", "lens_model")},
+          ${aaCol("ZORIGINALFILESIZE", "original_file_size")}
         FROM ZASSET a
         LEFT JOIN ZADDITIONALASSETATTRIBUTES aa ON a.Z_PK = aa.ZASSET
         WHERE COALESCE(a.ZTRASHEDSTATE, 0) = 0

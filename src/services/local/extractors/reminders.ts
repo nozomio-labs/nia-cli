@@ -32,41 +32,38 @@ interface ReminderRow {
 }
 
 function findReminderDbs(basePath: string): string[] {
+  // If basePath is a file, use it directly
+  try {
+    if (statSync(basePath).isFile()) return [basePath];
+  } catch {
+    return [];
+  }
+
   const dbs: string[] = [];
 
-  const storesDir = path.join(basePath, "Stores");
-  let entries: string[];
-  try {
-    entries = readdirSync(storesDir);
-  } catch {
+  // Try Container_v1/Stores first (standard macOS path), then Stores, then basePath
+  const storesDirs = [
+    path.join(basePath, "Container_v1", "Stores"),
+    path.join(basePath, "Stores"),
+    basePath,
+  ];
+
+  for (const storesDir of storesDirs) {
+    let entries: string[];
     try {
-      statSync(basePath);
-      return [basePath];
+      entries = readdirSync(storesDir);
     } catch {
-      return [];
+      continue;
     }
-  }
 
-  for (const entry of entries) {
-    const storePath = path.join(storesDir, entry);
-    try {
-      if (statSync(storePath).isDirectory()) {
-        const innerEntries = readdirSync(storePath);
-        for (const inner of innerEntries) {
-          const ext = path.extname(inner).toLowerCase();
-          if ([".sqlite", ".db", ".storedata"].includes(ext)) {
-            dbs.push(path.join(storePath, inner));
-          }
-        }
+    for (const entry of entries) {
+      const ext = path.extname(entry).toLowerCase();
+      if ([".sqlite", ".sqlite3", ".db", ".storedata"].includes(ext)) {
+        dbs.push(path.join(storesDir, entry));
       }
-    } catch {}
-  }
+    }
 
-  if (dbs.length === 0) {
-    try {
-      statSync(basePath);
-      dbs.push(basePath);
-    } catch {}
+    if (dbs.length > 0) break;
   }
 
   return dbs;
@@ -106,35 +103,55 @@ function extractFromSingleRemindersDb(
     }
 
     const cursorModified = (cursor.last_modified_at as number) ?? 0;
-    const hasCalendar = hasTable(db, "ZREMCDCALENDAR");
+    const hasList = hasTable(db, "ZREMCDBASELIST");
 
-    const query = hasCalendar
+    // Column names vary across macOS versions:
+    // - ZTITLE vs ZTITLE1 for reminder title
+    // - ZLASTMODIFIEDDATE vs ZMODIFICATIONDATE for modification time
+    // - ZREMCDBASELIST vs ZREMCDCALENDAR for list table
+    // - ZNAME vs ZTITLE for list name
+    const reminderCols = new Set(
+      (db.query("PRAGMA table_info(ZREMCDREMINDER)").all() as Array<{ name: string }>).map((c) => c.name.toUpperCase()),
+    );
+    const titleCol = reminderCols.has("ZTITLE1") ? "ZTITLE1" : "ZTITLE";
+    const modCol = reminderCols.has("ZLASTMODIFIEDDATE") ? "ZLASTMODIFIEDDATE" : reminderCols.has("ZMODIFICATIONDATE") ? "ZMODIFICATIONDATE" : "ZMODIFIEDDATE";
+
+    let listNameExpr = "NULL";
+    if (hasList) {
+      const listCols = new Set(
+        (db.query("PRAGMA table_info(ZREMCDBASELIST)").all() as Array<{ name: string }>).map((c) => c.name.toUpperCase()),
+      );
+      const listNameCol = listCols.has("ZNAME") ? "ZNAME" : listCols.has("ZTITLE") ? "ZTITLE" : "ZTITLE1";
+      listNameExpr = `c.${listNameCol}`;
+    }
+
+    const query = hasList
       ? `SELECT
           r.Z_PK AS pk,
-          r.ZTITLE1 AS title,
+          r.${titleCol} AS title,
           r.ZNOTES AS notes,
-          c.ZTITLE1 AS list_name,
+          ${listNameExpr} AS list_name,
           r.ZPRIORITY AS priority,
           COALESCE(r.ZCOMPLETED, 0) AS completed,
           r.ZDUEDATE AS due_date,
-          r.ZMODIFIEDDATE AS modified_at
+          r.${modCol} AS modified_at
         FROM ZREMCDREMINDER r
-        LEFT JOIN ZREMCDCALENDAR c ON r.ZLIST = c.Z_PK
-        WHERE r.ZMODIFIEDDATE > ?
-        ORDER BY r.ZMODIFIEDDATE
+        LEFT JOIN ZREMCDBASELIST c ON r.ZLIST = c.Z_PK
+        WHERE r.${modCol} > ?
+        ORDER BY r.${modCol}
         LIMIT ${QUERY_LIMIT}`
       : `SELECT
           r.Z_PK AS pk,
-          r.ZTITLE1 AS title,
+          r.${titleCol} AS title,
           r.ZNOTES AS notes,
           NULL AS list_name,
           r.ZPRIORITY AS priority,
           COALESCE(r.ZCOMPLETED, 0) AS completed,
           r.ZDUEDATE AS due_date,
-          r.ZMODIFIEDDATE AS modified_at
+          r.${modCol} AS modified_at
         FROM ZREMCDREMINDER r
-        WHERE r.ZMODIFIEDDATE > ?
-        ORDER BY r.ZMODIFIEDDATE
+        WHERE r.${modCol} > ?
+        ORDER BY r.${modCol}
         LIMIT ${QUERY_LIMIT}`;
 
     const rows = db.query(query).all(cursorModified) as ReminderRow[];

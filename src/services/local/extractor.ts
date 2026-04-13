@@ -607,15 +607,31 @@ export function extractSqliteSource(
 	const maxRowsPerTable = options.maxRowsPerTable ?? SQLITE_MAX_ROWS_PER_TABLE;
 	const maxTotalRows = options.maxTotalRows ?? SQLITE_MAX_TOTAL_ROWS;
 
-	// Resolve to an actual SQLite file. Some sources point at a directory
-	// (Apple Reminders, Contacts, Books library, etc.) — walk for the first
-	// .sqlite / .db / .abcddb / .storedata.
+	// Dispatch to typed extractor BEFORE path resolution — typed extractors
+	// handle their own path logic (e.g. Reminders/Contacts iterate multiple
+	// DB files in a directory, which findSqliteInDir would flatten to one).
+	const typedExtractors: Record<string, (p: string, c?: Record<string, unknown>) => SyncExtractionResult> = {
+		whatsapp: extractWhatsApp,
+		notes: extractNotes,
+		contacts: extractContacts,
+		reminders: extractReminders,
+		podcasts: extractPodcasts,
+		photos_metadata: extractPhotos,
+		screen_time: extractScreenTime,
+	};
+
+	const typedExtractor = typedExtractors[connectorKey];
+	if (typedExtractor) {
+		return typedExtractor(path.resolve(sourcePath));
+	}
+
+	// Generic extraction: resolve to an actual SQLite file. Some sources point
+	// at a directory — walk for the first .sqlite / .db / .abcddb / .storedata.
 	let dbPath = path.resolve(sourcePath);
 	let isDir = false;
 	try {
 		isDir = statSync(dbPath).isDirectory();
 	} catch {
-		// not found — return empty
 		return {
 			files: [],
 			cursor: {},
@@ -640,21 +656,6 @@ export function extractSqliteSource(
 			};
 		}
 		dbPath = found;
-	}
-
-	const typedExtractors: Record<string, (p: string, c?: Record<string, unknown>) => SyncExtractionResult> = {
-		whatsapp: extractWhatsApp,
-		notes: extractNotes,
-		contacts: extractContacts,
-		reminders: extractReminders,
-		podcasts: extractPodcasts,
-		photos_metadata: extractPhotos,
-		screen_time: extractScreenTime,
-	};
-
-	const typedExtractor = typedExtractors[connectorKey];
-	if (typedExtractor) {
-		return typedExtractor(dbPath);
 	}
 
 	let copiedPath: string;

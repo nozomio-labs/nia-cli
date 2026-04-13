@@ -413,25 +413,25 @@ describe("Reminders extractor", () => {
 		const dbPath = path.join(tempDir, "reminders.sqlite");
 		const db = new Database(dbPath);
 
-		db.run(`CREATE TABLE ZREMCDCALENDAR (
+		db.run(`CREATE TABLE ZREMCDBASELIST (
 			Z_PK INTEGER PRIMARY KEY,
-			ZTITLE1 TEXT
+			ZNAME TEXT
 		)`);
 		db.run(`CREATE TABLE ZREMCDREMINDER (
 			Z_PK INTEGER PRIMARY KEY,
-			ZTITLE1 TEXT,
+			ZTITLE TEXT,
 			ZNOTES TEXT,
 			ZLIST INTEGER,
 			ZPRIORITY INTEGER,
 			ZCOMPLETED INTEGER DEFAULT 0,
 			ZDUEDATE REAL,
-			ZMODIFIEDDATE REAL
+			ZLASTMODIFIEDDATE REAL
 		)`);
 
-		db.run("INSERT INTO ZREMCDCALENDAR VALUES (1, 'Shopping')");
+		db.run("INSERT INTO ZREMCDBASELIST VALUES (1, 'Shopping')");
 		const mod = cocoaTimestamp(new Date("2024-04-01T09:00:00Z"));
 		const due = cocoaTimestamp(new Date("2024-04-02T12:00:00Z"));
-		db.run("INSERT INTO ZREMCDREMINDER VALUES (1, 'Buy milk', 'Organic only', 1, 1, 0, ?, ?)", [due, mod]);
+		db.run("INSERT INTO ZREMCDREMINDER (Z_PK, ZTITLE, ZNOTES, ZLIST, ZPRIORITY, ZCOMPLETED, ZDUEDATE, ZLASTMODIFIEDDATE) VALUES (1, 'Buy milk', 'Organic only', 1, 1, 0, ?, ?)", [due, mod]);
 		db.close();
 
 		const result = extractReminders(dbPath);
@@ -454,14 +454,14 @@ describe("Reminders extractor", () => {
 		expect(result.files).toHaveLength(0);
 	});
 
-	test("finds databases in Stores subdirectories", () => {
-		const storeDir = path.join(tempDir, "Stores", "store1");
+	test("finds databases in Stores directory", () => {
+		const storeDir = path.join(tempDir, "Container_v1", "Stores");
 		mkdirSync(storeDir, { recursive: true });
-		const dbPath = path.join(storeDir, "reminders.sqlite");
+		const dbPath = path.join(storeDir, "Data-test.sqlite");
 		const db = new Database(dbPath);
 
-		db.run("CREATE TABLE ZREMCDREMINDER (Z_PK INTEGER PRIMARY KEY, ZTITLE1 TEXT, ZNOTES TEXT, ZLIST INTEGER, ZPRIORITY INTEGER, ZCOMPLETED INTEGER DEFAULT 0, ZDUEDATE REAL, ZMODIFIEDDATE REAL)");
-		db.run("INSERT INTO ZREMCDREMINDER VALUES (1, 'Test', NULL, NULL, NULL, 0, NULL, ?)", [cocoaTimestamp(new Date("2024-01-01T00:00:00Z"))]);
+		db.run("CREATE TABLE ZREMCDREMINDER (Z_PK INTEGER PRIMARY KEY, ZTITLE TEXT, ZNOTES TEXT, ZLIST INTEGER, ZPRIORITY INTEGER, ZCOMPLETED INTEGER DEFAULT 0, ZDUEDATE REAL, ZLASTMODIFIEDDATE REAL)");
+		db.run("INSERT INTO ZREMCDREMINDER (Z_PK, ZTITLE, ZLASTMODIFIEDDATE) VALUES (1, 'Test', ?)", [cocoaTimestamp(new Date("2024-01-01T00:00:00Z"))]);
 		db.close();
 
 		const result = extractReminders(tempDir);
