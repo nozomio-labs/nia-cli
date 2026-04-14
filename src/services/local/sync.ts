@@ -99,8 +99,8 @@ async function uploadWithRetry(
 }
 
 function cursorsEqual(
-	left: FolderCursor | undefined,
-	right: FolderCursor | undefined,
+	left: Record<string, unknown> | undefined,
+	right: Record<string, unknown> | undefined,
 ): boolean {
 	return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
 }
@@ -139,7 +139,7 @@ export async function syncLocalSource(
 	const isFolderMode = detectedType === TYPE_FOLDER || detectedType === "";
 
 	let extraction: SyncExtractionResult;
-	let nextCursor: FolderCursor;
+	let nextCursor: Record<string, unknown>;
 	let connectorType: string;
 	let extractorCursor: FolderCursor | undefined;
 	let resetReason: string | undefined;
@@ -202,7 +202,7 @@ export async function syncLocalSource(
 					{
 						local_folder_id: sourceId,
 						files: [],
-						cursor: nextCursor as unknown as Record<string, unknown>,
+						cursor: nextCursor,
 						stats: extraction.stats,
 						is_final_batch: true,
 						connector_type: connectorType,
@@ -244,9 +244,7 @@ export async function syncLocalSource(
 				{
 					local_folder_id: sourceId,
 					files: batch,
-					cursor: isFinalBatch
-						? (nextCursor as unknown as Record<string, unknown>)
-						: {},
+					cursor: isFinalBatch ? nextCursor : {},
 					stats: isFinalBatch ? extraction.stats : {},
 					is_final_batch: isFinalBatch,
 					connector_type: connectorType,

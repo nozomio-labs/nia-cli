@@ -30,9 +30,14 @@ function extractTextFromNoteBody(
 	const bytes = decompressed;
 
 	while (i < bytes.length) {
-		if (bytes[i] >= 0x20 && bytes[i] < 0x7f) {
+		const b = bytes[i] as number;
+		if (b >= 0x20 && b < 0x7f) {
 			let end = i;
-			while (end < bytes.length && bytes[end] >= 0x20 && bytes[end] < 0x7f) {
+			while (
+				end < bytes.length &&
+				(bytes[end] as number) >= 0x20 &&
+				(bytes[end] as number) < 0x7f
+			) {
 				end++;
 			}
 			const fragment = bytes.subarray(i, end).toString();
@@ -40,11 +45,12 @@ function extractTextFromNoteBody(
 				chunks.push(fragment);
 			}
 			i = end;
-		} else if (bytes[i] >= 0xc0) {
+		} else if (b >= 0xc0) {
 			let end = i;
 			while (
 				end < bytes.length &&
-				(bytes[end] >= 0x80 || (bytes[end] >= 0x20 && bytes[end] < 0x7f))
+				((bytes[end] as number) >= 0x80 ||
+					((bytes[end] as number) >= 0x20 && (bytes[end] as number) < 0x7f))
 			) {
 				end++;
 			}

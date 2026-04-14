@@ -223,10 +223,10 @@ describe("WhatsApp extractor", () => {
 		const result = extractWhatsApp(dbPath);
 		expect(result.stats.error).toBeUndefined();
 		expect(result.files.length).toBe(1);
-		expect(result.files[0].path).toContain("whatsapp/Alice/");
-		expect(result.files[0].content).toContain("Hello!");
-		expect(result.files[0].content).toContain("Hi back!");
-		expect(result.files[0].content).toContain("Chat: Alice");
+		expect(result.files[0]?.path).toContain("whatsapp/Alice/");
+		expect(result.files[0]?.content).toContain("Hello!");
+		expect(result.files[0]?.content).toContain("Hi back!");
+		expect(result.files[0]?.content).toContain("Chat: Alice");
 		expect(result.cursor.last_message_date).toBeDefined();
 	});
 
@@ -316,9 +316,9 @@ describe("Notes extractor", () => {
 		const result = extractNotes(dbPath);
 		expect(result.stats.error).toBeUndefined();
 		expect(result.files.length).toBe(1);
-		expect(result.files[0].path).toContain("notes/Work/My Note_1.txt");
-		expect(result.files[0].content).toContain("Title: My Note");
-		expect(result.files[0].content).toContain("Folder: Work");
+		expect(result.files[0]?.path).toContain("notes/Work/My Note_1.txt");
+		expect(result.files[0]?.content).toContain("Title: My Note");
+		expect(result.files[0]?.content).toContain("Folder: Work");
 		expect(result.cursor.last_note_id).toBe(1);
 	});
 
@@ -399,11 +399,11 @@ describe("Contacts extractor", () => {
 		const result = extractContacts(dbPath);
 		expect(result.stats.error).toBeUndefined();
 		expect(result.files.length).toBe(1);
-		expect(result.files[0].content).toContain("Name: John Doe");
-		expect(result.files[0].content).toContain("+1234567890");
-		expect(result.files[0].content).toContain("john@example.com");
-		expect(result.files[0].content).toContain("Organization: Acme");
-		expect(result.files[0].path).toContain("contacts/John Doe_1.txt");
+		expect(result.files[0]?.content).toContain("Name: John Doe");
+		expect(result.files[0]?.content).toContain("+1234567890");
+		expect(result.files[0]?.content).toContain("john@example.com");
+		expect(result.files[0]?.content).toContain("Organization: Acme");
+		expect(result.files[0]?.path).toContain("contacts/John Doe_1.txt");
 	});
 
 	test("finds databases in Sources subdirectories", () => {
@@ -430,7 +430,7 @@ describe("Contacts extractor", () => {
 
 		const result = extractContacts(tempDir);
 		expect(result.files.length).toBe(1);
-		expect(result.files[0].content).toContain("Jane Smith");
+		expect(result.files[0]?.content).toContain("Jane Smith");
 	});
 });
 
@@ -476,11 +476,13 @@ describe("Reminders extractor", () => {
 		const result = extractReminders(dbPath);
 		expect(result.stats.error).toBeUndefined();
 		expect(result.files.length).toBe(1);
-		expect(result.files[0].content).toContain("Title: Buy milk");
-		expect(result.files[0].content).toContain("List: Shopping");
-		expect(result.files[0].content).toContain("Priority: High");
-		expect(result.files[0].content).toContain("Organic only");
-		expect(result.files[0].path).toContain("reminders/Shopping/Buy milk_1.txt");
+		expect(result.files[0]?.content).toContain("Title: Buy milk");
+		expect(result.files[0]?.content).toContain("List: Shopping");
+		expect(result.files[0]?.content).toContain("Priority: High");
+		expect(result.files[0]?.content).toContain("Organic only");
+		expect(result.files[0]?.path).toContain(
+			"reminders/Shopping/Buy milk_1.txt",
+		);
 	});
 
 	test("handles missing ZREMCDREMINDER table gracefully", () => {
@@ -510,7 +512,7 @@ describe("Reminders extractor", () => {
 
 		const result = extractReminders(tempDir);
 		expect(result.files.length).toBe(1);
-		expect(result.files[0].content).toContain("Test");
+		expect(result.files[0]?.content).toContain("Test");
 	});
 });
 
@@ -555,13 +557,13 @@ describe("Podcasts extractor", () => {
 		const result = extractPodcasts(dbPath);
 		expect(result.stats.error).toBeUndefined();
 		expect(result.files.length).toBe(1);
-		expect(result.files[0].content).toContain("Episode: Episode 42");
-		expect(result.files[0].content).toContain("Show: Tech Talk");
-		expect(result.files[0].content).toContain("Author: Jane Host");
-		expect(result.files[0].content).toContain("Duration: 1h 1m");
-		expect(result.files[0].content).toContain("Great episode about AI");
-		expect(result.files[0].content).not.toContain("<p>");
-		expect(result.files[0].path).toContain("podcasts/Tech Talk/");
+		expect(result.files[0]?.content).toContain("Episode: Episode 42");
+		expect(result.files[0]?.content).toContain("Show: Tech Talk");
+		expect(result.files[0]?.content).toContain("Author: Jane Host");
+		expect(result.files[0]?.content).toContain("Duration: 1h 1m");
+		expect(result.files[0]?.content).toContain("Great episode about AI");
+		expect(result.files[0]?.content).not.toContain("<p>");
+		expect(result.files[0]?.path).toContain("podcasts/Tech Talk/");
 		expect(result.cursor.last_pub_date).toBeDefined();
 	});
 });
@@ -623,13 +625,13 @@ describe("Photos extractor", () => {
 		const result = extractPhotos(dbPath);
 		expect(result.stats.error).toBeUndefined();
 		expect(result.files.length).toBe(1);
-		expect(result.files[0].path).toBe("photos/2024-06-20.txt");
-		expect(result.files[0].content).toContain("IMG_0001.HEIC");
-		expect(result.files[0].content).toContain("4032x3024");
-		expect(result.files[0].content).toContain("GPS: 37.774900, -122.419400");
-		expect(result.files[0].content).toContain("Apple iPhone 15 Pro");
-		expect(result.files[0].content).toContain("Favorite: Yes");
-		expect(result.files[0].content).not.toContain("IMG_0002");
+		expect(result.files[0]?.path).toBe("photos/2024-06-20.txt");
+		expect(result.files[0]?.content).toContain("IMG_0001.HEIC");
+		expect(result.files[0]?.content).toContain("4032x3024");
+		expect(result.files[0]?.content).toContain("GPS: 37.774900, -122.419400");
+		expect(result.files[0]?.content).toContain("Apple iPhone 15 Pro");
+		expect(result.files[0]?.content).toContain("Favorite: Yes");
+		expect(result.files[0]?.content).not.toContain("IMG_0002");
 	});
 });
 
@@ -681,11 +683,11 @@ describe("Screen Time extractor", () => {
 		const result = extractScreenTime(dbPath);
 		expect(result.stats.error).toBeUndefined();
 		expect(result.files.length).toBe(1);
-		expect(result.files[0].path).toBe("screen_time/2024-08-10.txt");
-		expect(result.files[0].content).toContain("Screen Time: 2024-08-10");
-		expect(result.files[0].content).toContain("safari");
-		expect(result.files[0].content).toContain("Slack");
-		expect(result.files[0].content).toContain("2 sessions");
+		expect(result.files[0]?.path).toBe("screen_time/2024-08-10.txt");
+		expect(result.files[0]?.content).toContain("Screen Time: 2024-08-10");
+		expect(result.files[0]?.content).toContain("safari");
+		expect(result.files[0]?.content).toContain("Slack");
+		expect(result.files[0]?.content).toContain("2 sessions");
 		expect(result.cursor.last_start_date).toBeDefined();
 	});
 

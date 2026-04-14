@@ -141,7 +141,7 @@ export function extractScreenTime(
 		}
 
 		if (rows.length > 0) {
-			maxStartDate = rows[rows.length - 1].start_date;
+			maxStartDate = (rows[rows.length - 1] as ScreenTimeRow).start_date;
 		}
 	} finally {
 		try {

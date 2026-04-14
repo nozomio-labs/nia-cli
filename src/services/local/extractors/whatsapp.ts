@@ -102,15 +102,18 @@ export function extractWhatsApp(
 
 			let windowStart = 0;
 			for (let i = 0; i < messages.length; i++) {
-				const currentIso = cocoaToIso(messages[i].message_date);
-				const startIso = cocoaToIso(messages[windowStart].message_date);
+				const current = messages[i] as WhatsAppRow;
+				const windowStartMsg = messages[windowStart] as WhatsAppRow;
+				const currentIso = cocoaToIso(current.message_date);
+				const startIso = cocoaToIso(windowStartMsg.message_date);
 				const startMs = startIso ? new Date(startIso).getTime() : 0;
 
 				const isLastMessage = i === messages.length - 1;
 				const nextExceedsWindow =
 					!isLastMessage &&
 					(() => {
-						const nextIso = cocoaToIso(messages[i + 1].message_date);
+						const next = messages[i + 1] as WhatsAppRow;
+						const nextIso = cocoaToIso(next.message_date);
 						const nextMs = nextIso ? new Date(nextIso).getTime() : 0;
 						return nextMs - startMs > TIME_WINDOW_MS;
 					})();
@@ -127,7 +130,7 @@ export function extractWhatsApp(
 					}
 
 					const dateStr = (startIso ?? "unknown").slice(0, 10);
-					const lastMsg = chunk[chunk.length - 1];
+					const lastMsg = chunk[chunk.length - 1] as WhatsAppRow;
 					const filePath = `whatsapp/${safeName(chatName)}/${dateStr}_${lastMsg.message_id}.txt`;
 
 					files.push({
@@ -149,8 +152,10 @@ export function extractWhatsApp(
 
 			const last = messages[messages.length - 1];
 			if (
-				last.message_date > maxMessageDate ||
-				(last.message_date === maxMessageDate && last.message_id > maxMessageId)
+				last &&
+				(last.message_date > maxMessageDate ||
+					(last.message_date === maxMessageDate &&
+						last.message_id > maxMessageId))
 			) {
 				maxMessageDate = last.message_date;
 				maxMessageId = last.message_id;
