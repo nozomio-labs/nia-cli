@@ -1,18 +1,22 @@
 import { type Dirent, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { extractContacts } from "./extractors/contacts.ts";
+import { extractNotes } from "./extractors/notes.ts";
+import { extractPhotos } from "./extractors/photos.ts";
+import { extractPodcasts } from "./extractors/podcasts.ts";
+import { extractReminders } from "./extractors/reminders.ts";
+import { extractScreenTime } from "./extractors/screentime.ts";
+import {
+	cleanupTempCopy,
+	copySqliteToTemp,
+	openSqliteFromCopy,
+} from "./extractors/shared.ts";
+import { extractWhatsApp } from "./extractors/whatsapp.ts";
 import type {
 	FolderCursor,
 	LocalFileItem,
 	SyncExtractionResult,
 } from "./types.ts";
-import { copySqliteToTemp, openSqliteFromCopy, cleanupTempCopy } from "./extractors/shared.ts";
-import { extractWhatsApp } from "./extractors/whatsapp.ts";
-import { extractNotes } from "./extractors/notes.ts";
-import { extractContacts } from "./extractors/contacts.ts";
-import { extractReminders } from "./extractors/reminders.ts";
-import { extractPodcasts } from "./extractors/podcasts.ts";
-import { extractPhotos } from "./extractors/photos.ts";
-import { extractScreenTime } from "./extractors/screentime.ts";
 
 export const TYPE_FOLDER = "folder";
 export const MAX_ROWS = 100_000;
@@ -610,7 +614,10 @@ export function extractSqliteSource(
 	// Dispatch to typed extractor BEFORE path resolution — typed extractors
 	// handle their own path logic (e.g. Reminders/Contacts iterate multiple
 	// DB files in a directory, which findSqliteInDir would flatten to one).
-	const typedExtractors: Record<string, (p: string, c?: Record<string, unknown>) => SyncExtractionResult> = {
+	const typedExtractors: Record<
+		string,
+		(p: string, c?: Record<string, unknown>) => SyncExtractionResult
+	> = {
 		whatsapp: extractWhatsApp,
 		notes: extractNotes,
 		contacts: extractContacts,
