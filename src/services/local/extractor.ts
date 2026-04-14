@@ -5,6 +5,14 @@ import type {
 	LocalFileItem,
 	SyncExtractionResult,
 } from "./types.ts";
+import { copySqliteToTemp, openSqliteFromCopy, cleanupTempCopy } from "./extractors/shared.ts";
+import { extractWhatsApp } from "./extractors/whatsapp.ts";
+import { extractNotes } from "./extractors/notes.ts";
+import { extractContacts } from "./extractors/contacts.ts";
+import { extractReminders } from "./extractors/reminders.ts";
+import { extractPodcasts } from "./extractors/podcasts.ts";
+import { extractPhotos } from "./extractors/photos.ts";
+import { extractScreenTime } from "./extractors/screentime.ts";
 
 export const TYPE_FOLDER = "folder";
 export const MAX_ROWS = 100_000;
@@ -599,15 +607,31 @@ export function extractSqliteSource(
 	const maxRowsPerTable = options.maxRowsPerTable ?? SQLITE_MAX_ROWS_PER_TABLE;
 	const maxTotalRows = options.maxTotalRows ?? SQLITE_MAX_TOTAL_ROWS;
 
-	// Resolve to an actual SQLite file. Some sources point at a directory
-	// (Apple Reminders, Contacts, Books library, etc.) — walk for the first
-	// .sqlite / .db / .abcddb / .storedata.
+	// Dispatch to typed extractor BEFORE path resolution — typed extractors
+	// handle their own path logic (e.g. Reminders/Contacts iterate multiple
+	// DB files in a directory, which findSqliteInDir would flatten to one).
+	const typedExtractors: Record<string, (p: string, c?: Record<string, unknown>) => SyncExtractionResult> = {
+		whatsapp: extractWhatsApp,
+		notes: extractNotes,
+		contacts: extractContacts,
+		reminders: extractReminders,
+		podcasts: extractPodcasts,
+		photos_metadata: extractPhotos,
+		screen_time: extractScreenTime,
+	};
+
+	const typedExtractor = typedExtractors[connectorKey];
+	if (typedExtractor) {
+		return typedExtractor(path.resolve(sourcePath));
+	}
+
+	// Generic extraction: resolve to an actual SQLite file. Some sources point
+	// at a directory — walk for the first .sqlite / .db / .abcddb / .storedata.
 	let dbPath = path.resolve(sourcePath);
 	let isDir = false;
 	try {
 		isDir = statSync(dbPath).isDirectory();
 	} catch {
-		// not found — return empty
 		return {
 			files: [],
 			cursor: {},
@@ -634,29 +658,9 @@ export function extractSqliteSource(
 		dbPath = found;
 	}
 
-	// Copy to a temp location to dodge file locks (Chrome History.db, etc.).
-	// Bun: import fs from "node:fs" + use copyFileSync.
-	// We use a per-source temp file path keyed off connectorKey + mtime so the
-	// copy is reproducible across runs and we don't accumulate temp files.
-	const fs = require("node:fs") as typeof import("node:fs");
-	const os = require("node:os") as typeof import("node:os");
-	const tempDir = path.join(os.tmpdir(), "nia-personal-sqlite");
-	try {
-		fs.mkdirSync(tempDir, { recursive: true });
-	} catch {
-		// best effort
-	}
 	let copiedPath: string;
 	try {
-		const stat = fs.statSync(dbPath);
-		copiedPath = path.join(
-			tempDir,
-			`${connectorKey}-${stat.mtimeMs.toFixed(0)}-${path.basename(dbPath)}`,
-		);
-		// Only copy if the cached one doesn't exist yet for this mtime.
-		if (!fs.existsSync(copiedPath)) {
-			fs.copyFileSync(dbPath, copiedPath);
-		}
+		copiedPath = copySqliteToTemp(dbPath, connectorKey);
 	} catch (err) {
 		return {
 			files: [],
@@ -668,28 +672,11 @@ export function extractSqliteSource(
 		};
 	}
 
-	// Open the copy with bun:sqlite. Read-only mode for safety.
-	let Database: typeof import("bun:sqlite").Database;
-	try {
-		const mod = require("bun:sqlite") as {
-			Database: typeof import("bun:sqlite").Database;
-		};
-		Database = mod.Database;
-	} catch (err) {
-		return {
-			files: [],
-			cursor: {},
-			stats: {
-				db_type: connectorKey,
-				error: `bun:sqlite not available: ${err instanceof Error ? err.message : String(err)}`,
-			},
-		};
-	}
-
 	let db: import("bun:sqlite").Database;
 	try {
-		db = new Database(copiedPath, { readonly: true });
+		db = openSqliteFromCopy(copiedPath);
 	} catch (err) {
+		cleanupTempCopy(copiedPath);
 		return {
 			files: [],
 			cursor: {},
@@ -801,6 +788,7 @@ export function extractSqliteSource(
 		} catch {
 			// ignore
 		}
+		cleanupTempCopy(copiedPath);
 	}
 
 	return {

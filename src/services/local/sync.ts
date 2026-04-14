@@ -168,8 +168,16 @@ export async function syncLocalSource(
 			connectorType = detectedType;
 		}
 	} catch (error) {
-		const message =
-			error instanceof Error ? error.message : "Extraction failed";
+		let message = error instanceof Error ? error.message : "Extraction failed";
+
+		if (message.includes("unable to open database file") || message.includes("SQLITE_CANTOPEN")) {
+			message = `Cannot open database at ${sourcePath}. Grant Full Disk Access to your terminal in System Settings > Privacy & Security > Full Disk Access.`;
+		} else if (message.includes("database is locked") || message.includes("SQLITE_BUSY")) {
+			message = `Database is locked by another app. Close the app using ${sourcePath} and retry.`;
+		} else if (message.includes("not a database") || message.includes("SQLITE_NOTADB")) {
+			message = `File at ${sourcePath} is not a valid SQLite database.`;
+		}
+
 		await reportLocalSyncError(sourceId, message, sourcePath, options.apiKey);
 		return {
 			path: sourcePath,
