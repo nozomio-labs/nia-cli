@@ -17,16 +17,17 @@ import { createResponseError, withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
 
 /**
- * Personal data ingestion — autonomous setup for the macOS personal-data
- * sources Nia's backend extractors already support (iMessage, Safari history,
- * Apple Notes, Contacts, Reminders, Stickies).
+ * Personal data ingestion — autonomous setup for the personal-data sources
+ * Nia's backend extractors already support (iMessage, Safari history, Apple
+ * Notes, Contacts, Reminders, Stickies on macOS; Chrome/Firefox history,
+ * Obsidian, VSCode/Cursor workspaces, Claude Code sessions cross-platform).
  *
  * This is a thin CLI orchestration layer on top of the existing daemon endpoint
  * (`POST /v2/daemon/sources` with `detected_type: <connector>`). The backend's
  * `db_extractor.py` already knows how to extract from the SQLite databases at
- * the standard macOS paths — this command just discovers them, registers each
- * as a local-folder source with the right `detected_type`, and (optionally)
- * chains into `nia vault init` to create a vault from the resulting source IDs.
+ * the standard paths — this command just discovers them, registers each as a
+ * local-folder source with the right `detected_type`, and (optionally) chains
+ * into `nia vault init` to create a vault from the resulting source IDs.
  *
  * Designed so an agent can fulfill "index my life into a vault" in one shell
  * call: the global skill teaches the agent to chain
@@ -37,15 +38,23 @@ import { createOutput } from "../utils/output.ts";
  */
 
 // ---------------------------------------------------------------------------
-// macOS personal-data source catalog
+// Personal-data source catalog
 // ---------------------------------------------------------------------------
 //
 // Each entry maps a connector key (which the backend's db_extractor.py
-// recognizes) to the standard macOS path(s) where that data lives. The
-// "candidates" list is checked in order; the first existing path wins.
+// recognizes) to platform-specific path(s) where that data lives. Candidates
+// are checked in order; the first existing path wins.
 //
-// To extend to other operating systems, add a `linuxCandidates` /
-// `windowsCandidates` section keyed off `process.platform`.
+// Platform model:
+// - `platforms` whitelists which OSes the source applies to (default
+//   `["darwin"]` for back-compat). Sources not applicable to the current
+//   platform are filtered out of discovery entirely — not reported missing.
+// - `macosCandidates` / `windowsCandidates` — static paths probed on each
+//   platform. The corresponding `discover` / `discoverWindows` callback (for
+//   sources behind profile-keyed / versioned paths) runs first; static
+//   candidates are the fallback.
+// - To add Linux support later, introduce `linuxCandidates` + `discoverLinux`
+//   on the spec and extend `discoverPath` with a `linux` branch.
 
 /**
  * Where the source's content lives and which backend extractor handles it:
@@ -63,23 +72,42 @@ import { createOutput } from "../utils/output.ts";
  */
 type ExtractorTier = "dedicated" | "generic" | "folder" | "none";
 
-interface PersonalSourceSpec {
+export type SupportedPlatform = "darwin" | "win32" | "linux";
+
+export interface PersonalSourceSpec {
 	connector: string; // user-facing key for --enable, e.g. "books", "reminders"
 	displayName: string;
 	description: string;
 	/**
-	 * Static candidate paths probed in order. The first one that exists wins.
-	 * For sources whose location can't be expressed as a fixed path (Firefox
-	 * profiles, Anki collections, VSCode workspaceStorage), set `discover`
-	 * instead — it runs custom logic to find the path at runtime.
+	 * Platforms this source is applicable to. Defaults to `["darwin"]` for
+	 * back-compat with the original macOS-only catalog. Sources not listed for
+	 * the current `process.platform` are filtered out of discovery entirely.
+	 */
+	platforms?: SupportedPlatform[];
+	/**
+	 * Static candidate paths probed on macOS in order. The first one that
+	 * exists wins. For sources whose location can't be expressed as a fixed
+	 * path (Firefox profiles, Anki collections, VSCode workspaceStorage), set
+	 * `discover` instead — it runs custom logic to find the path at runtime.
 	 */
 	macosCandidates: string[];
 	/**
-	 * Optional custom discovery callback. Returns the resolved path if found,
-	 * or null if not. Used for sources behind glob-y / profile-keyed paths
-	 * (Firefox, Anki, VSCode/Cursor workspaceStorage).
+	 * Optional custom discovery callback for macOS. Returns the resolved path
+	 * if found, or null if not. Used for sources behind glob-y / profile-keyed
+	 * paths (Firefox, Anki, VSCode/Cursor workspaceStorage).
 	 */
 	discover?: () => string | null;
+	/**
+	 * Static candidate paths probed on Windows. Same semantics as
+	 * `macosCandidates`. Typically rooted under `%LOCALAPPDATA%` or `%APPDATA%`.
+	 */
+	windowsCandidates?: string[];
+	/**
+	 * Optional Windows discovery callback. When set, runs before
+	 * `windowsCandidates`. Useful for Firefox profiles, Chrome profile dirs,
+	 * Obsidian vault heuristics, etc.
+	 */
+	discoverWindows?: () => string | null;
 	requiresFullDiskAccess: boolean;
 	extractorTier: ExtractorTier;
 	/**
@@ -341,9 +369,99 @@ function discoverCursorWorkspaceStorage(): string | null {
 	return existsSync(root) ? root : null;
 }
 
-/** Claude Code project conversations. */
+/**
+ * Claude Code project conversations. Cross-platform: reads from
+ * `~/.claude/projects` which resolves correctly on both macOS and Windows via
+ * `os.homedir()`. Used as both `discover` and `discoverWindows` in the catalog.
+ */
 function discoverClaudeCodeHistory(): string | null {
 	const root = path.join(HOME, ".claude/projects");
+	return existsSync(root) ? root : null;
+}
+
+// ---------------------------------------------------------------------------
+// Windows discovery helpers
+// ---------------------------------------------------------------------------
+//
+// Windows doesn't have stable tilde-style `~/Library/...` paths — personal
+// data sits under `%LOCALAPPDATA%` (machine-local) or `%APPDATA%` (roaming).
+// We resolve those env vars with a fallback to `HOME\AppData\...` so tests
+// and non-standard shells still work.
+
+function winEnv(key: string): string | null {
+	const v = process.env[key];
+	return v && v.length > 0 ? v : null;
+}
+
+function localAppData(): string {
+	return winEnv("LOCALAPPDATA") ?? path.join(HOME, "AppData", "Local");
+}
+
+function appData(): string {
+	return winEnv("APPDATA") ?? path.join(HOME, "AppData", "Roaming");
+}
+
+/**
+ * Chrome on Windows stores History under
+ * `%LOCALAPPDATA%\Google\Chrome\User Data\<Profile>\History`. Probe the
+ * Default profile first, then any `Profile N` directories.
+ */
+export function discoverChromeHistoryWindows(): string | null {
+	const userData = path.join(localAppData(), "Google", "Chrome", "User Data");
+	const defaultHistory = path.join(userData, "Default", "History");
+	if (existsSync(defaultHistory)) return defaultHistory;
+	for (const entry of safeListDir(userData)) {
+		if (entry.startsWith("Profile")) {
+			const candidate = path.join(userData, entry, "History");
+			if (existsSync(candidate)) return candidate;
+		}
+	}
+	return null;
+}
+
+/** Find the first Firefox profile with a places.sqlite on Windows. */
+export function discoverFirefoxProfileWindows(): string | null {
+	const profilesDir = path.join(appData(), "Mozilla", "Firefox", "Profiles");
+	for (const entry of safeListDir(profilesDir)) {
+		const candidate = path.join(profilesDir, entry, "places.sqlite");
+		if (existsSync(candidate)) return candidate;
+	}
+	return null;
+}
+
+/**
+ * Find an Obsidian vault on Windows. Checks common locations including
+ * OneDrive-redirected Documents folders — most Windows users have that
+ * redirection enabled by default on modern Windows 10/11.
+ */
+export function discoverObsidianVaultWindows(): string | null {
+	const roots = [
+		path.join(HOME, "Documents", "Obsidian"),
+		path.join(HOME, "Obsidian"),
+		path.join(HOME, "OneDrive", "Documents", "Obsidian"),
+		path.join(HOME, "OneDrive", "Obsidian"),
+		path.join(HOME, "Documents"),
+		path.join(HOME, "OneDrive", "Documents"),
+	];
+	for (const c of roots) {
+		if (existsSync(path.join(c, ".obsidian"))) return c;
+		for (const sub of safeListDir(c)) {
+			const subPath = path.join(c, sub);
+			if (existsSync(path.join(subPath, ".obsidian"))) return subPath;
+		}
+	}
+	return null;
+}
+
+/** VSCode workspaceStorage on Windows. */
+export function discoverVSCodeWorkspaceStorageWindows(): string | null {
+	const root = path.join(appData(), "Code", "User", "workspaceStorage");
+	return existsSync(root) ? root : null;
+}
+
+/** Cursor workspaceStorage on Windows. */
+export function discoverCursorWorkspaceStorageWindows(): string | null {
+	const root = path.join(appData(), "Cursor", "User", "workspaceStorage");
 	return existsSync(root) ? root : null;
 }
 
@@ -351,7 +469,7 @@ function discoverClaudeCodeHistory(): string | null {
 // The catalog
 // ---------------------------------------------------------------------------
 
-const PERSONAL_SOURCES: PersonalSourceSpec[] = [
+export const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 	// ─────────────────────────────────────────────────────────────────────
 	// Tier 1 — dedicated backend extractors (full schema awareness)
 	// ─────────────────────────────────────────────────────────────────────
@@ -381,31 +499,35 @@ const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 		connector: "chrome_history",
 		displayName: "Chrome History",
 		description: "Google Chrome browsing history (URLs, titles, visit times)",
+		platforms: ["darwin", "win32"],
 		macosCandidates: [
 			path.join(
 				HOME,
 				"Library/Application Support/Google/Chrome/Default/History",
 			),
 		],
+		discoverWindows: discoverChromeHistoryWindows,
 		requiresFullDiskAccess: false,
 		extractorTier: "dedicated",
 		dbType: "chrome_history",
 		autoEnable: true,
 		notes:
-			"Chrome locks the History DB while Chrome is running. Quit Chrome before sync, or the daemon copies it first.",
+			"Chrome locks the History DB while Chrome is running. Quit Chrome before sync, or the daemon copies it first. On Windows, probes %LOCALAPPDATA%\\Google\\Chrome\\User Data\\<Profile>\\History — Default first, then Profile N directories.",
 	},
 	{
 		connector: "firefox_history",
 		displayName: "Firefox History",
 		description: "Mozilla Firefox browsing history + bookmarks (places.sqlite)",
+		platforms: ["darwin", "win32"],
 		macosCandidates: [],
 		discover: discoverFirefoxProfile,
+		discoverWindows: discoverFirefoxProfileWindows,
 		requiresFullDiskAccess: false,
 		extractorTier: "dedicated",
 		dbType: "firefox_history",
 		autoEnable: true,
 		notes:
-			"Probes ~/Library/Application Support/Firefox/Profiles/<profile>/places.sqlite. Picks the first profile that has one.",
+			"Probes ~/Library/Application Support/Firefox/Profiles/<profile>/places.sqlite on macOS and %APPDATA%\\Mozilla\\Firefox\\Profiles\\<profile>\\places.sqlite on Windows. Picks the first profile that has one.",
 	},
 	{
 		connector: "telegram",
@@ -695,14 +817,16 @@ const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 		displayName: "Obsidian Vault",
 		description:
 			"Obsidian markdown vault — notes, links, daily notes, attachments",
+		platforms: ["darwin", "win32"],
 		macosCandidates: [],
 		discover: discoverObsidianVault,
+		discoverWindows: discoverObsidianVaultWindows,
 		requiresFullDiskAccess: false,
 		extractorTier: "folder",
 		dbType: "folder",
 		autoEnable: true,
 		notes:
-			"Discovers any directory containing .obsidian/ under ~/Documents/, ~/Documents/Obsidian/, or ~/Obsidian/.",
+			"Discovers any directory containing .obsidian/ under ~/Documents/, ~/Documents/Obsidian/, or ~/Obsidian/ on macOS; on Windows also probes OneDrive-redirected Documents folders.",
 	},
 	{
 		connector: "icloud_drive",
@@ -759,8 +883,10 @@ const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 		displayName: "VSCode Workspace History",
 		description:
 			"VSCode per-workspace state (recent files, search history, terminal output). Each workspaceStorage/<hash>/state.vscdb is a SQLite.",
+		platforms: ["darwin", "win32"],
 		macosCandidates: [],
 		discover: discoverVSCodeWorkspaceStorage,
+		discoverWindows: discoverVSCodeWorkspaceStorageWindows,
 		requiresFullDiskAccess: false,
 		extractorTier: "folder",
 		dbType: "folder",
@@ -773,8 +899,10 @@ const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 		displayName: "Cursor Workspace History",
 		description:
 			"Cursor (Chromium-based VSCode fork) per-workspace state — same shape as VSCode",
+		platforms: ["darwin", "win32"],
 		macosCandidates: [],
 		discover: discoverCursorWorkspaceStorage,
+		discoverWindows: discoverCursorWorkspaceStorageWindows,
 		requiresFullDiskAccess: false,
 		extractorTier: "folder",
 		dbType: "folder",
@@ -785,14 +913,16 @@ const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 		displayName: "Claude Code Session History",
 		description:
 			"Per-project Claude Code conversation transcripts (~/.claude/projects/<proj>/conversations/*.jsonl). What you've discussed with the agent.",
+		platforms: ["darwin", "win32"],
 		macosCandidates: [],
 		discover: discoverClaudeCodeHistory,
+		discoverWindows: discoverClaudeCodeHistory,
 		requiresFullDiskAccess: false,
 		extractorTier: "folder",
 		dbType: "folder",
 		autoEnable: false,
 		notes:
-			"Recursive privacy: indexing your agent conversations into a vault that the agent then reads creates an interesting feedback loop. Off by default.",
+			"Recursive privacy: indexing your agent conversations into a vault that the agent then reads creates an interesting feedback loop. Off by default. Works identically on macOS and Windows — ~/.claude/projects resolves via os.homedir() on both.",
 	},
 
 	// ─────────────────────────────────────────────────────────────────────
@@ -927,16 +1057,51 @@ function probeReadable(p: string): boolean {
 	}
 }
 
-function discoverPath(spec: PersonalSourceSpec): {
+const DEFAULT_PLATFORMS: SupportedPlatform[] = ["darwin"];
+
+function getPlatforms(spec: PersonalSourceSpec): SupportedPlatform[] {
+	return spec.platforms ?? DEFAULT_PLATFORMS;
+}
+
+export function isApplicableToCurrentPlatform(
+	spec: PersonalSourceSpec,
+): boolean {
+	const current = process.platform as SupportedPlatform;
+	return getPlatforms(spec).includes(current);
+}
+
+/** Resolve the (discover, candidates) pair for a spec on the current platform. */
+export function resolvePlatformSources(spec: PersonalSourceSpec): {
+	discover?: () => string | null;
+	candidates: string[];
+} {
+	if (process.platform === "win32") {
+		return {
+			discover: spec.discoverWindows,
+			candidates: spec.windowsCandidates ?? [],
+		};
+	}
+	// darwin (and anything else that opts in via `platforms`) — uses the
+	// original mac discovery + macosCandidates. Linux support would add a
+	// branch here paired with `discoverLinux` / `linuxCandidates` fields.
+	return {
+		discover: spec.discover,
+		candidates: spec.macosCandidates,
+	};
+}
+
+export function discoverPath(spec: PersonalSourceSpec): {
 	resolvedPath: string | null;
 	exists: boolean;
 	readable: boolean;
 } {
+	const { discover, candidates } = resolvePlatformSources(spec);
+
 	// Custom discovery wins (Firefox profiles, Anki collections, Apple Books
-	// versioned databases, Photos library, etc.).
-	if (spec.discover) {
+	// versioned databases, Photos library, Chrome profiles on Windows, etc.).
+	if (discover) {
 		try {
-			const resolved = spec.discover();
+			const resolved = discover();
 			if (resolved && existsSync(resolved)) {
 				return {
 					resolvedPath: resolved,
@@ -949,7 +1114,7 @@ function discoverPath(spec: PersonalSourceSpec): {
 		}
 	}
 
-	for (const candidate of spec.macosCandidates) {
+	for (const candidate of candidates) {
 		if (existsSync(candidate)) {
 			return {
 				resolvedPath: candidate,
@@ -988,7 +1153,13 @@ async function discoverAll(apiKey?: string): Promise<DiscoveryResult[]> {
 		}
 	}
 
-	return PERSONAL_SOURCES.map((spec) => {
+	// Filter out sources that aren't applicable to the current platform so
+	// Windows users don't see 30 macOS-only entries as "not found" and vice
+	// versa. Sources are only probed if their `platforms` list includes
+	// `process.platform`.
+	const applicable = PERSONAL_SOURCES.filter(isApplicableToCurrentPlatform);
+
+	return applicable.map((spec) => {
 		const { resolvedPath, exists, readable } = discoverPath(spec);
 		// Match by connector key first; for folder-mode sources, also try
 		// matching by resolved path so we don't double-register the same dir.
@@ -1065,7 +1236,7 @@ const statusCommand = app
 	.sub("status")
 	.meta({
 		description:
-			"Probe macOS for all known personal-data sources (30+ across iMessage, browsers, knowledge tools, calendars, mail, journals, code histories, and more) and report which exist, which are readable, which are already registered with Nia, and which need new backend extractors.",
+			"Probe the current OS for all known personal-data sources applicable to that platform (macOS: 30+ including iMessage, browsers, knowledge tools, calendars, mail, journals, code histories; Windows: Chrome/Firefox history, Obsidian, VSCode/Cursor workspaces, Claude Code sessions) and report which exist, which are readable, which are already registered with Nia, and which need new backend extractors.",
 	})
 	.run(async ({ flags }) => {
 		const fmt = createOutput({ color: flags.color });
@@ -1126,7 +1297,7 @@ const initCommand = app
 	.sub("init")
 	.meta({
 		description:
-			"Auto-discover macOS personal-data sources (30+ across iMessage, browsers, knowledge tools, calendars, mail, journals, code histories), register each with Nia, and (optionally) create a vault from them in one shot. The 'index my life' command.",
+			"Auto-discover personal-data sources for the current OS (macOS: 30+ across iMessage, browsers, knowledge tools, calendars, mail, journals, code histories; Windows: Chrome/Firefox history, Obsidian, VSCode/Cursor workspaces, Claude Code sessions), register each with Nia, and (optionally) create a vault from them in one shot. The 'index my life' command.",
 	})
 	.flags({
 		enable: {
@@ -1236,18 +1407,24 @@ const initCommand = app
 								? enableList.includes(r.connector)
 								: enableAll || r.autoEnable),
 					)
-					.map((r) => ({
-						connector: r.connector,
-						display_name: r.displayName,
-						searched: [
-							...(PERSONAL_SOURCES.find((s) => s.connector === r.connector)
-								?.macosCandidates ?? []),
-							...(PERSONAL_SOURCES.find((s) => s.connector === r.connector)
-								?.discover
-								? ["(custom discovery callback found nothing)"]
-								: []),
-						],
-					})),
+					.map((r) => {
+						const spec = PERSONAL_SOURCES.find(
+							(s) => s.connector === r.connector,
+						);
+						const { discover, candidates } = spec
+							? resolvePlatformSources(spec)
+							: { discover: undefined, candidates: [] };
+						return {
+							connector: r.connector,
+							display_name: r.displayName,
+							searched: [
+								...candidates,
+								...(discover
+									? ["(custom discovery callback found nothing)"]
+									: []),
+							],
+						};
+					}),
 				roadmap_no_extractor_yet: discovery
 					.filter((r) => r.extractorTier === "none" && r.exists)
 					.map((r) => ({
@@ -1451,15 +1628,15 @@ export const personalCommand = annotate(
 		.sub("personal")
 		.meta({
 			description:
-				"Index personal data (iMessage, Safari, Notes, Contacts, Reminders, Stickies, Voice Memos) into Nia in one command. Auto-discovers macOS paths and registers each as a local-folder source.",
+				"Index personal data into Nia in one command. On macOS, auto-discovers iMessage, Safari, Notes, Contacts, Reminders, Stickies, Voice Memos, and 20+ others. On Windows, auto-discovers Chrome/Firefox history, Obsidian vault, VSCode/Cursor workspaces, and Claude Code sessions. Registers each as a local-folder source.",
 		})
 		.command(initCommand)
 		.command(statusCommand)
 		.command(syncCommand),
 	[
-		"`nia personal init --yes` is the autonomous one-shot setup for personal data on macOS — it auto-discovers iMessage, Safari, Notes, Contacts, Reminders, Stickies, and Voice Memos at standard locations and registers each as a local-folder source.",
+		"`nia personal init --yes` is the autonomous one-shot setup for personal data — on macOS it auto-discovers iMessage, Safari, Notes, Contacts, Reminders, Stickies, Voice Memos, and more; on Windows it auto-discovers Chrome/Firefox history, Obsidian vault, VSCode/Cursor workspaces, and Claude Code sessions. Registers each as a local-folder source.",
 		"Add `--vault \"My Life\"` to chain into `nia vault init` automatically: discover → register → create vault → trigger ingest, all in one shell call. This is the 'index my life' command.",
 		"Run `nia personal status` first to see what would be registered without writing anything. Use `--dry-run` on `init` for the same purpose.",
-		"Some sources (iMessage, Apple Notes, Contacts, etc.) require Full Disk Access on modern macOS. The CLI detects this and tells you exactly which ones need permission grants.",
+		"Some macOS sources (iMessage, Apple Notes, Contacts, etc.) require Full Disk Access. The CLI detects this and tells you exactly which ones need permission grants. Windows sources don't require FDA — the main gotcha is that Chrome must be quit before syncing its History DB.",
 	],
 );
