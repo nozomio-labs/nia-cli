@@ -332,6 +332,24 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 		);
 	});
 
+	test("Chrome history — picks Profile 2 over Profile 10 (numeric sort, not lexicographic)", () => {
+		const userData = path.join(
+			process.env.LOCALAPPDATA as string,
+			"Google",
+			"Chrome",
+			"User Data",
+		);
+		// No Default, no Profile 1 — lexicographic sort would pick Profile 10.
+		for (const profile of ["Profile 10", "Profile 2"]) {
+			mkdirSync(path.join(userData, profile), { recursive: true });
+			writeFileSync(path.join(userData, profile, "History"), "");
+		}
+
+		expect(discoverChromeHistoryWindows()).toBe(
+			path.join(userData, "Profile 2", "History"),
+		);
+	});
+
 	test("Chrome history — null when nothing exists", () => {
 		expect(discoverChromeHistoryWindows()).toBeNull();
 	});

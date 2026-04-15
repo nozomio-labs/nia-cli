@@ -414,9 +414,17 @@ export function discoverChromeHistoryWindows(): string | null {
 	const userData = path.join(localAppData(), "Google", "Chrome", "User Data");
 	const defaultHistory = path.join(userData, "Default", "History");
 	if (existsSync(defaultHistory)) return defaultHistory;
-	// Sort so `Profile 1` wins deterministically over `Profile 10` / `Profile 2`
-	// (readdir order is filesystem-dependent on Windows).
-	for (const entry of safeListDir(userData).sort()) {
+	// Sort numerically so `Profile 2` wins over `Profile 10` (lexicographic
+	// sort would flip them). Readdir order is filesystem-dependent on Windows.
+	const byProfileNumber = (a: string, b: string) => {
+		const na = parseInt(a.slice("Profile ".length), 10);
+		const nb = parseInt(b.slice("Profile ".length), 10);
+		return (
+			(Number.isNaN(na) ? Infinity : na) -
+			(Number.isNaN(nb) ? Infinity : nb)
+		);
+	};
+	for (const entry of safeListDir(userData).sort(byProfileNumber)) {
 		if (entry.startsWith("Profile")) {
 			const candidate = path.join(userData, entry, "History");
 			if (existsSync(candidate)) return candidate;
