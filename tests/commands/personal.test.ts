@@ -6,6 +6,7 @@ import {
 	discoverChromeHistoryWindows,
 	discoverCursorWorkspaceStorageWindows,
 	discoverFirefoxProfileWindows,
+	discoverObsidianVaultWindows,
 	discoverPath,
 	discoverVSCodeWorkspaceStorageWindows,
 	isApplicableToCurrentPlatform,
@@ -220,12 +221,18 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 	let tempDir: string;
 	const originalLocal = process.env.LOCALAPPDATA;
 	const originalRoaming = process.env.APPDATA;
+	const originalUserProfile = process.env.USERPROFILE;
 
 	beforeEach(() => {
 		tempDir = path.join(os.tmpdir(), `nia-personal-winhelpers-${Date.now()}`);
 		mkdirSync(tempDir, { recursive: true });
 		process.env.LOCALAPPDATA = path.join(tempDir, "Local");
 		process.env.APPDATA = path.join(tempDir, "Roaming");
+		// os.homedir() reads USERPROFILE on Windows. Point it at our temp dir
+		// so the Obsidian discovery (which uses homedir(), not LOCALAPPDATA)
+		// can be exercised hermetically.
+		process.env.USERPROFILE = path.join(tempDir, "Home");
+		mkdirSync(process.env.USERPROFILE, { recursive: true });
 	});
 
 	afterEach(() => {
@@ -234,6 +241,9 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 		else delete process.env.LOCALAPPDATA;
 		if (originalRoaming !== undefined) process.env.APPDATA = originalRoaming;
 		else delete process.env.APPDATA;
+		if (originalUserProfile !== undefined)
+			process.env.USERPROFILE = originalUserProfile;
+		else delete process.env.USERPROFILE;
 	});
 
 	test("Chrome history — Default profile wins over Profile N", () => {
@@ -315,5 +325,30 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 
 	test("VSCode returns null when the directory is absent", () => {
 		expect(discoverVSCodeWorkspaceStorageWindows()).toBeNull();
+	});
+
+	test("Obsidian — resolves iCloud Drive vault container", () => {
+		const home = process.env.USERPROFILE as string;
+		const vault = path.join(
+			home,
+			"iCloudDrive",
+			"iCloud~md~obsidian",
+			"PUNK RECORDS",
+		);
+		mkdirSync(path.join(vault, ".obsidian"), { recursive: true });
+
+		expect(discoverObsidianVaultWindows()).toBe(vault);
+	});
+
+	test("Obsidian — OneDrive vault still resolves after iCloud root added", () => {
+		const home = process.env.USERPROFILE as string;
+		const vault = path.join(home, "OneDrive", "Documents", "MyVault");
+		mkdirSync(path.join(vault, ".obsidian"), { recursive: true });
+
+		expect(discoverObsidianVaultWindows()).toBe(vault);
+	});
+
+	test("Obsidian — null when no vault anywhere", () => {
+		expect(discoverObsidianVaultWindows()).toBeNull();
 	});
 });

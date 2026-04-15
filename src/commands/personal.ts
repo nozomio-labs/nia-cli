@@ -432,16 +432,23 @@ export function discoverFirefoxProfileWindows(): string | null {
 /**
  * Find an Obsidian vault on Windows. Checks common locations including
  * OneDrive-redirected Documents folders — most Windows users have that
- * redirection enabled by default on modern Windows 10/11.
+ * redirection enabled by default on modern Windows 10/11 — and Apple's
+ * iCloud Drive container (`iCloudDrive\iCloud~md~obsidian\<vault>`), which
+ * is how Obsidian's mobile iCloud sync surfaces vaults on Windows when the
+ * user has iCloud for Windows installed.
  */
 export function discoverObsidianVaultWindows(): string | null {
+	// Read homedir at call time (not the module-level HOME const) so tests can
+	// override USERPROFILE to point at a temp dir.
+	const home = homedir();
 	const roots = [
-		path.join(HOME, "Documents", "Obsidian"),
-		path.join(HOME, "Obsidian"),
-		path.join(HOME, "OneDrive", "Documents", "Obsidian"),
-		path.join(HOME, "OneDrive", "Obsidian"),
-		path.join(HOME, "Documents"),
-		path.join(HOME, "OneDrive", "Documents"),
+		path.join(home, "Documents", "Obsidian"),
+		path.join(home, "Obsidian"),
+		path.join(home, "OneDrive", "Documents", "Obsidian"),
+		path.join(home, "OneDrive", "Obsidian"),
+		path.join(home, "iCloudDrive", "iCloud~md~obsidian"),
+		path.join(home, "Documents"),
+		path.join(home, "OneDrive", "Documents"),
 	];
 	for (const c of roots) {
 		if (existsSync(path.join(c, ".obsidian"))) return c;
@@ -826,7 +833,7 @@ export const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 		dbType: "folder",
 		autoEnable: true,
 		notes:
-			"Discovers any directory containing .obsidian/ under ~/Documents/, ~/Documents/Obsidian/, or ~/Obsidian/ on macOS; on Windows also probes OneDrive-redirected Documents folders.",
+			"Discovers any directory containing .obsidian/ under ~/Documents/, ~/Documents/Obsidian/, or ~/Obsidian/ on macOS; on Windows also probes OneDrive-redirected Documents folders and Apple iCloud Drive vaults at ~/iCloudDrive/iCloud~md~obsidian/<vault>.",
 	},
 	{
 		connector: "icloud_drive",
