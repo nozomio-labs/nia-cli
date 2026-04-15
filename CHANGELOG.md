@@ -1,5 +1,17 @@
 # nia-cli
 
+## 0.3.1
+
+### Patch Changes
+
+- Add `--llms-txt-strategy` flag to `nia sources index` command
+
+  Users can now control how llms.txt is used during documentation indexing:
+
+  - `prefer` (default) — use llms.txt URLs and supplement with crawled pages
+  - `only` — use only URLs from llms.txt
+  - `ignore` — skip llms.txt entirely and rely on crawling
+
 ## 0.3.0
 
 ### Minor Changes
