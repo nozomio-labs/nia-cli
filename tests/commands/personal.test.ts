@@ -8,7 +8,9 @@ import {
 	discoverFirefoxProfileWindows,
 	discoverObsidianVaultWindows,
 	discoverPath,
+	discoverPowerShellHistoryWindows,
 	discoverVSCodeWorkspaceStorageWindows,
+	discoverWindowsTimeline,
 	isApplicableToCurrentPlatform,
 	PERSONAL_SOURCES,
 	type PersonalSourceSpec,
@@ -207,6 +209,42 @@ describe("catalog Windows tagging", () => {
 	});
 });
 
+describe("catalog Windows-exclusive sources", () => {
+	const windowsOnly = ["windows_timeline", "powershell_history"] as const;
+
+	test("each is tagged win32-only and has Windows discovery wired", () => {
+		for (const connector of windowsOnly) {
+			const spec = PERSONAL_SOURCES.find((s) => s.connector === connector);
+			expect(spec).toBeDefined();
+			expect(spec?.platforms).toEqual(["win32"]);
+			expect(typeof spec?.discoverWindows).toBe("function");
+			// No macOS side: empty candidates and no discover callback.
+			expect(spec?.macosCandidates).toEqual([]);
+			expect(spec?.discover).toBeUndefined();
+		}
+	});
+
+	test("windows_timeline is generic-tier with schema-unaware dbType", () => {
+		const spec = PERSONAL_SOURCES.find(
+			(s) => s.connector === "windows_timeline",
+		);
+		expect(spec?.extractorTier).toBe("generic");
+		expect(spec?.dbType).toBe("windows_timeline");
+		// Off by default — generic walker output is noisy.
+		expect(spec?.autoEnable).toBe(false);
+	});
+
+	test("powershell_history is folder-tier and off by default", () => {
+		const spec = PERSONAL_SOURCES.find(
+			(s) => s.connector === "powershell_history",
+		);
+		expect(spec?.extractorTier).toBe("folder");
+		expect(spec?.dbType).toBe("folder");
+		// Off by default — shell history can leak pasted secrets.
+		expect(spec?.autoEnable).toBe(false);
+	});
+});
+
 // ---------------------------------------------------------------------------
 // Windows-only env-var-driven discovery helpers
 // ---------------------------------------------------------------------------
@@ -350,5 +388,53 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 
 	test("Obsidian — null when no vault anywhere", () => {
 		expect(discoverObsidianVaultWindows()).toBeNull();
+	});
+
+	test("Windows Timeline — resolves ActivitiesCache.db under a device-hash subdir", () => {
+		const root = path.join(
+			process.env.LOCALAPPDATA as string,
+			"ConnectedDevicesPlatform",
+		);
+		const deviceDir = path.join(root, "da9ed9198cc45ad3");
+		mkdirSync(deviceDir, { recursive: true });
+		const dbFile = path.join(deviceDir, "ActivitiesCache.db");
+		writeFileSync(dbFile, "");
+
+		expect(discoverWindowsTimeline()).toBe(dbFile);
+	});
+
+	test("Windows Timeline — resolves the older L.<username> subdir form", () => {
+		const root = path.join(
+			process.env.LOCALAPPDATA as string,
+			"ConnectedDevicesPlatform",
+		);
+		const legacyDir = path.join(root, "L.danit");
+		mkdirSync(legacyDir, { recursive: true });
+		const dbFile = path.join(legacyDir, "ActivitiesCache.db");
+		writeFileSync(dbFile, "");
+
+		expect(discoverWindowsTimeline()).toBe(dbFile);
+	});
+
+	test("Windows Timeline — null when ConnectedDevicesPlatform has no DB", () => {
+		expect(discoverWindowsTimeline()).toBeNull();
+	});
+
+	test("PowerShell history — resolves PSReadLine parent directory", () => {
+		const root = path.join(
+			process.env.APPDATA as string,
+			"Microsoft",
+			"Windows",
+			"PowerShell",
+			"PSReadLine",
+		);
+		mkdirSync(root, { recursive: true });
+		writeFileSync(path.join(root, "ConsoleHost_history.txt"), "");
+
+		expect(discoverPowerShellHistoryWindows()).toBe(root);
+	});
+
+	test("PowerShell history — null when PSReadLine directory is absent", () => {
+		expect(discoverPowerShellHistoryWindows()).toBeNull();
 	});
 });

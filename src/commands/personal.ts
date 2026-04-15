@@ -472,6 +472,38 @@ export function discoverCursorWorkspaceStorageWindows(): string | null {
 	return existsSync(root) ? root : null;
 }
 
+/**
+ * Windows Timeline / Activity History. The `ConnectedDevicesPlatform` service
+ * writes one `ActivitiesCache.db` per device, under a device-hash subdirectory
+ * (e.g. `da9ed9198cc45ad3/`) — sometimes `L.<username>/` on older builds.
+ * Scan all subdirs of the root for the file and return the first match.
+ */
+export function discoverWindowsTimeline(): string | null {
+	const root = path.join(localAppData(), "ConnectedDevicesPlatform");
+	for (const entry of safeListDir(root)) {
+		const candidate = path.join(root, entry, "ActivitiesCache.db");
+		if (existsSync(candidate)) return candidate;
+	}
+	return null;
+}
+
+/**
+ * PowerShell command history via PSReadLine. Stored as plain text at
+ * `%APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt`
+ * (plus one `<host>_history.txt` per shell host — VSCode, ISE, etc.). Return
+ * the parent directory so the folder extractor ingests every host's history.
+ */
+export function discoverPowerShellHistoryWindows(): string | null {
+	const root = path.join(
+		appData(),
+		"Microsoft",
+		"Windows",
+		"PowerShell",
+		"PSReadLine",
+	);
+	return existsSync(root) ? root : null;
+}
+
 // ---------------------------------------------------------------------------
 // The catalog
 // ---------------------------------------------------------------------------
@@ -772,6 +804,22 @@ export const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 		dbType: "voice_memos",
 		autoEnable: false,
 	},
+	{
+		connector: "windows_timeline",
+		displayName: "Windows Timeline",
+		description:
+			"Windows Activity History (ActivitiesCache.db) — app launches, visited URLs, foreground windows, clipboard content the OS captured while Timeline was enabled.",
+		platforms: ["win32"],
+		macosCandidates: [],
+		windowsCandidates: [],
+		discoverWindows: discoverWindowsTimeline,
+		requiresFullDiskAccess: false,
+		extractorTier: "generic",
+		dbType: "windows_timeline",
+		autoEnable: false,
+		notes:
+			"Probes %LOCALAPPDATA%\\ConnectedDevicesPlatform\\<device-hash>\\ActivitiesCache.db — device-hash subdir (or older L.<username>) is scanned automatically. Backend falls through to the generic TEXT-column walker until a dedicated extractor lands; a schema-aware extractor (Activity, ActivityOperation tables, AppId/Payload JSON) is the natural follow-up. Off by default because output is noisier than dedicated sources.",
+	},
 
 	// ─────────────────────────────────────────────────────────────────────
 	// Tier 3 — folder mode (ingested as a generic folder by the local sync daemon)
@@ -930,6 +978,22 @@ export const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 		autoEnable: false,
 		notes:
 			"Recursive privacy: indexing your agent conversations into a vault that the agent then reads creates an interesting feedback loop. Off by default. Works identically on macOS and Windows — ~/.claude/projects resolves via os.homedir() on both.",
+	},
+	{
+		connector: "powershell_history",
+		displayName: "PowerShell History",
+		description:
+			"PSReadLine command history — ConsoleHost_history.txt plus per-host files (VSCode integrated terminal, ISE, etc.). Plain text, one command per line.",
+		platforms: ["win32"],
+		macosCandidates: [],
+		windowsCandidates: [],
+		discoverWindows: discoverPowerShellHistoryWindows,
+		requiresFullDiskAccess: false,
+		extractorTier: "folder",
+		dbType: "folder",
+		autoEnable: false,
+		notes:
+			"Registers %APPDATA%\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ as a folder source. Every *_history.txt under it is ingested by the folder walker. Off by default — shell history leaks secrets if you've ever pasted credentials into a terminal.",
 	},
 
 	// ─────────────────────────────────────────────────────────────────────
