@@ -437,4 +437,18 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 	test("PowerShell history — null when PSReadLine directory is absent", () => {
 		expect(discoverPowerShellHistoryWindows()).toBeNull();
 	});
+
+	test("Claude Code history — resolves against runtime USERPROFILE, not module-load HOME", () => {
+		// Regression: discoverClaudeCodeHistory (used as both discover and
+		// discoverWindows for claude_code_history) must read homedir() at call
+		// time so tests can override USERPROFILE. See Cursor review on PR #26.
+		const home = process.env.USERPROFILE as string;
+		const projects = path.join(home, ".claude", "projects");
+		mkdirSync(projects, { recursive: true });
+
+		const spec = PERSONAL_SOURCES.find(
+			(s) => s.connector === "claude_code_history",
+		);
+		expect(spec?.discoverWindows?.()).toBe(projects);
+	});
 });

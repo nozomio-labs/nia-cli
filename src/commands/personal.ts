@@ -373,9 +373,13 @@ function discoverCursorWorkspaceStorage(): string | null {
  * Claude Code project conversations. Cross-platform: reads from
  * `~/.claude/projects` which resolves correctly on both macOS and Windows via
  * `os.homedir()`. Used as both `discover` and `discoverWindows` in the catalog.
+ *
+ * Reads `homedir()` at call time (not the module-level HOME const) so tests
+ * can override HOME / USERPROFILE — matches the contract used by every other
+ * Windows discovery helper (see `discoverObsidianVaultWindows`).
  */
 function discoverClaudeCodeHistory(): string | null {
-	const root = path.join(HOME, ".claude/projects");
+	const root = path.join(homedir(), ".claude/projects");
 	return existsSync(root) ? root : null;
 }
 
@@ -977,7 +981,7 @@ export const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 		dbType: "folder",
 		autoEnable: false,
 		notes:
-			"Recursive privacy: indexing your agent conversations into a vault that the agent then reads creates an interesting feedback loop. Off by default. Works identically on macOS and Windows — ~/.claude/projects resolves via os.homedir() on both.",
+			"Recursive privacy: indexing your agent conversations into a vault that the agent then reads creates an interesting feedback loop. Off by default. Works identically on macOS and Windows — ~/.claude/projects is resolved via os.homedir() at call time on both.",
 	},
 	{
 		connector: "powershell_history",
