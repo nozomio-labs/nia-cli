@@ -135,6 +135,7 @@ export function buildDocumentationSourceCreateRequest(input: {
 	extractBranding?: boolean;
 	maxDepth?: number;
 	checkLlmsTxt?: boolean;
+	llmsTxtStrategy?: string;
 	onlyMainContent?: boolean;
 }): DocumentationSourceCreateRequest {
 	const request: DocumentationSourceCreateRequest = {
@@ -159,6 +160,9 @@ export function buildDocumentationSourceCreateRequest(input: {
 	}
 	if (input.checkLlmsTxt !== undefined) {
 		request.check_llms_txt = input.checkLlmsTxt;
+	}
+	if (input.llmsTxtStrategy) {
+		request.llms_txt_strategy = input.llmsTxtStrategy;
 	}
 	if (input.onlyMainContent !== undefined) {
 		request.only_main_content = input.onlyMainContent;
@@ -230,6 +234,11 @@ const indexCommand = annotate(
 				type: "boolean",
 				description: "Check for llms.txt file (default: true)",
 			},
+			"llms-txt-strategy": {
+				type: "string",
+				description:
+					"How to use llms.txt: 'prefer' (llms.txt + crawl), 'only' (llms.txt only), 'ignore' (skip llms.txt)",
+			},
 			"only-main-content": {
 				type: "boolean",
 				description: "Extract only main content, skip navigation/footer",
@@ -251,6 +260,7 @@ const indexCommand = annotate(
 						extractBranding: flags["extract-branding"],
 						maxDepth: flags["max-depth"],
 						checkLlmsTxt: flags["check-llms-txt"],
+						llmsTxtStrategy: flags["llms-txt-strategy"],
 						onlyMainContent: flags["only-main-content"],
 					}),
 				);
