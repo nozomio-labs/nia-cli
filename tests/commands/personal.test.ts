@@ -314,6 +314,24 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 		expect(resolved).toBe(path.join(userData, "Profile 1", "History"));
 	});
 
+	test("Chrome history — picks Profile 1 over Profile 2/Profile 10 (sorted, not readdir order)", () => {
+		const userData = path.join(
+			process.env.LOCALAPPDATA as string,
+			"Google",
+			"Chrome",
+			"User Data",
+		);
+		// Create in non-sorted order; discovery must still land on Profile 1.
+		for (const profile of ["Profile 10", "Profile 2", "Profile 1"]) {
+			mkdirSync(path.join(userData, profile), { recursive: true });
+			writeFileSync(path.join(userData, profile, "History"), "");
+		}
+
+		expect(discoverChromeHistoryWindows()).toBe(
+			path.join(userData, "Profile 1", "History"),
+		);
+	});
+
 	test("Chrome history — null when nothing exists", () => {
 		expect(discoverChromeHistoryWindows()).toBeNull();
 	});
@@ -420,7 +438,7 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 		expect(discoverWindowsTimeline()).toBeNull();
 	});
 
-	test("PowerShell history — resolves PSReadLine parent directory", () => {
+	test("PowerShell history — resolves PSReadLine parent directory (legacy 5.1)", () => {
 		const root = path.join(
 			process.env.APPDATA as string,
 			"Microsoft",
@@ -434,8 +452,64 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 		expect(discoverPowerShellHistoryWindows()).toBe(root);
 	});
 
+	test("PowerShell history — prefers pwsh (PS7) over legacy when both exist", () => {
+		const legacy = path.join(
+			process.env.APPDATA as string,
+			"Microsoft",
+			"Windows",
+			"PowerShell",
+			"PSReadLine",
+		);
+		const pwsh = path.join(
+			process.env.APPDATA as string,
+			"Microsoft",
+			"PowerShell",
+			"PSReadLine",
+		);
+		mkdirSync(legacy, { recursive: true });
+		mkdirSync(pwsh, { recursive: true });
+
+		expect(discoverPowerShellHistoryWindows()).toBe(pwsh);
+	});
+
+	test("PowerShell history — resolves pwsh path when only PS7 is installed", () => {
+		const pwsh = path.join(
+			process.env.APPDATA as string,
+			"Microsoft",
+			"PowerShell",
+			"PSReadLine",
+		);
+		mkdirSync(pwsh, { recursive: true });
+		writeFileSync(path.join(pwsh, "ConsoleHost_history.txt"), "");
+
+		expect(discoverPowerShellHistoryWindows()).toBe(pwsh);
+	});
+
 	test("PowerShell history — null when PSReadLine directory is absent", () => {
 		expect(discoverPowerShellHistoryWindows()).toBeNull();
+	});
+
+	test("appData() fallback — resolves against runtime homedir when APPDATA is unset", () => {
+		// Regression: localAppData()/appData() fall back to homedir() at call
+		// time (not the module-level HOME const) so tests overriding only
+		// USERPROFILE still resolve correctly. See Cursor review on PR #26.
+		const savedAppData = process.env.APPDATA;
+		delete process.env.APPDATA;
+		try {
+			const home = process.env.USERPROFILE as string;
+			const pwsh = path.join(
+				home,
+				"AppData",
+				"Roaming",
+				"Microsoft",
+				"PowerShell",
+				"PSReadLine",
+			);
+			mkdirSync(pwsh, { recursive: true });
+			expect(discoverPowerShellHistoryWindows()).toBe(pwsh);
+		} finally {
+			if (savedAppData !== undefined) process.env.APPDATA = savedAppData;
+		}
 	});
 
 	test("Claude Code history — resolves against runtime USERPROFILE, not module-load HOME", () => {

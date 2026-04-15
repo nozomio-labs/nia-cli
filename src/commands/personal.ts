@@ -389,8 +389,8 @@ function discoverClaudeCodeHistory(): string | null {
 //
 // Windows doesn't have stable tilde-style `~/Library/...` paths — personal
 // data sits under `%LOCALAPPDATA%` (machine-local) or `%APPDATA%` (roaming).
-// We resolve those env vars with a fallback to `HOME\AppData\...` so tests
-// and non-standard shells still work.
+// We resolve those env vars with a fallback to `homedir()\AppData\...` so
+// tests (which can override USERPROFILE) and non-standard shells still work.
 
 function winEnv(key: string): string | null {
 	const v = process.env[key];
@@ -398,11 +398,11 @@ function winEnv(key: string): string | null {
 }
 
 function localAppData(): string {
-	return winEnv("LOCALAPPDATA") ?? path.join(HOME, "AppData", "Local");
+	return winEnv("LOCALAPPDATA") ?? path.join(homedir(), "AppData", "Local");
 }
 
 function appData(): string {
-	return winEnv("APPDATA") ?? path.join(HOME, "AppData", "Roaming");
+	return winEnv("APPDATA") ?? path.join(homedir(), "AppData", "Roaming");
 }
 
 /**
@@ -414,7 +414,9 @@ export function discoverChromeHistoryWindows(): string | null {
 	const userData = path.join(localAppData(), "Google", "Chrome", "User Data");
 	const defaultHistory = path.join(userData, "Default", "History");
 	if (existsSync(defaultHistory)) return defaultHistory;
-	for (const entry of safeListDir(userData)) {
+	// Sort so `Profile 1` wins deterministically over `Profile 10` / `Profile 2`
+	// (readdir order is filesystem-dependent on Windows).
+	for (const entry of safeListDir(userData).sort()) {
 		if (entry.startsWith("Profile")) {
 			const candidate = path.join(userData, entry, "History");
 			if (existsSync(candidate)) return candidate;
@@ -492,20 +494,24 @@ export function discoverWindowsTimeline(): string | null {
 }
 
 /**
- * PowerShell command history via PSReadLine. Stored as plain text at
- * `%APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt`
- * (plus one `<host>_history.txt` per shell host — VSCode, ISE, etc.). Return
- * the parent directory so the folder extractor ingests every host's history.
+ * PowerShell command history via PSReadLine. Two variants exist:
+ *   - PowerShell 7+ (`pwsh`, modern default): `%APPDATA%\Microsoft\PowerShell\PSReadLine\`
+ *   - Windows PowerShell 5.1 (legacy, built-in): `%APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\`
+ *
+ * Each directory holds `ConsoleHost_history.txt` plus one `<host>_history.txt`
+ * per shell host (VSCode, ISE, etc.). We prefer the pwsh path when both exist
+ * — it's the modern default and where active users write history today.
+ * Return the parent directory so the folder extractor ingests every host file.
  */
 export function discoverPowerShellHistoryWindows(): string | null {
-	const root = path.join(
-		appData(),
-		"Microsoft",
-		"Windows",
-		"PowerShell",
-		"PSReadLine",
-	);
-	return existsSync(root) ? root : null;
+	const candidates = [
+		path.join(appData(), "Microsoft", "PowerShell", "PSReadLine"),
+		path.join(appData(), "Microsoft", "Windows", "PowerShell", "PSReadLine"),
+	];
+	for (const root of candidates) {
+		if (existsSync(root)) return root;
+	}
+	return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -997,7 +1003,7 @@ export const PERSONAL_SOURCES: PersonalSourceSpec[] = [
 		dbType: "folder",
 		autoEnable: false,
 		notes:
-			"Registers %APPDATA%\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ as a folder source. Every *_history.txt under it is ingested by the folder walker. Off by default — shell history leaks secrets if you've ever pasted credentials into a terminal.",
+			"Registers the PSReadLine directory as a folder source — PowerShell 7 (%APPDATA%\\Microsoft\\PowerShell\\PSReadLine\\) if present, else Windows PowerShell 5.1 (%APPDATA%\\Microsoft\\Windows\\PowerShell\\PSReadLine\\). Every *_history.txt under it is ingested by the folder walker. Off by default — shell history leaks secrets if you've ever pasted credentials into a terminal.",
 	},
 
 	// ─────────────────────────────────────────────────────────────────────
@@ -1321,7 +1327,7 @@ const statusCommand = app
 
 			fmt.output({
 				platform: process.platform,
-				home: HOME,
+				home: homedir(),
 				tiers: {
 					tier_1_dedicated_extractor: groups.dedicated.map(serializeResult),
 					tier_2_generic_sqlite_extraction: groups.generic.map(serializeResult),

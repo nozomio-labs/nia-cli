@@ -18,6 +18,6 @@ Extends `nia personal` beyond macOS with platform-aware discovery. Eight sources
 **Windows-exclusive**:
 
 - **Windows Timeline** — generic-tier. Scans `%LOCALAPPDATA%\ConnectedDevicesPlatform\<device-hash>\ActivitiesCache.db` (modern device-hash form or older `L.<username>`). Backend's generic TEXT-column walker ingests it today; a dedicated schema-aware extractor is a clean follow-up.
-- **PowerShell history** — folder-tier. Registers `%APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\`, which captures `ConsoleHost_history.txt` plus per-host history files (VSCode integrated terminal, ISE). Off by default — shell history can leak pasted secrets.
+- **PowerShell history** — folder-tier. Prefers PowerShell 7 (`%APPDATA%\Microsoft\PowerShell\PSReadLine\`), falling back to Windows PowerShell 5.1 (`%APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\`). Captures `ConsoleHost_history.txt` plus per-host history files (VSCode integrated terminal, ISE). Off by default — shell history can leak pasted secrets.
 
 Mac-only entries (iMessage, Safari, Notes, Contacts, Reminders, Stickies, etc.) keep their default `platforms: ["darwin"]` and are filtered out of discovery on Windows rather than reported as "not found". macOS behavior is unchanged.
