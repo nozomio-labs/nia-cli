@@ -14,6 +14,7 @@ import {
 	isApplicableToCurrentPlatform,
 	PERSONAL_SOURCES,
 	type PersonalSourceSpec,
+	parseEnableList,
 	resolvePlatformSources,
 } from "../../src/commands/personal.ts";
 
@@ -248,13 +249,6 @@ describe("catalog Windows-exclusive sources", () => {
 // ---------------------------------------------------------------------------
 // Windows-only env-var-driven discovery helpers
 // ---------------------------------------------------------------------------
-//
-// These read LOCALAPPDATA / APPDATA at call time, so we can override them with
-// a tmp dir per test. Skipped on non-Windows because the helpers look up real
-// Windows env vars — the behavior under a simulated env is identical to
-// running on Windows, but CI matrix OSes may interpret backslash paths
-// differently, so we keep it simple.
-
 describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 	let tempDir: string;
 	const originalLocal = process.env.LOCALAPPDATA;
@@ -266,9 +260,6 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 		mkdirSync(tempDir, { recursive: true });
 		process.env.LOCALAPPDATA = path.join(tempDir, "Local");
 		process.env.APPDATA = path.join(tempDir, "Roaming");
-		// os.homedir() reads USERPROFILE on Windows. Point it at our temp dir
-		// so the Obsidian discovery (which uses homedir(), not LOCALAPPDATA)
-		// can be exercised hermetically.
 		process.env.USERPROFILE = path.join(tempDir, "Home");
 		mkdirSync(process.env.USERPROFILE, { recursive: true });
 	});
@@ -321,7 +312,6 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 			"Chrome",
 			"User Data",
 		);
-		// Create in non-sorted order; discovery must still land on Profile 1.
 		for (const profile of ["Profile 10", "Profile 2", "Profile 1"]) {
 			mkdirSync(path.join(userData, profile), { recursive: true });
 			writeFileSync(path.join(userData, profile, "History"), "");
@@ -339,7 +329,6 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 			"Chrome",
 			"User Data",
 		);
-		// No Default, no Profile 1 — lexicographic sort would pick Profile 10.
 		for (const profile of ["Profile 10", "Profile 2"]) {
 			mkdirSync(path.join(userData, profile), { recursive: true });
 			writeFileSync(path.join(userData, profile, "History"), "");
@@ -508,9 +497,6 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 	});
 
 	test("appData() fallback — resolves against runtime homedir when APPDATA is unset", () => {
-		// Regression: localAppData()/appData() fall back to homedir() at call
-		// time (not the module-level HOME const) so tests overriding only
-		// USERPROFILE still resolve correctly. See Cursor review on PR #26.
 		const savedAppData = process.env.APPDATA;
 		delete process.env.APPDATA;
 		try {
@@ -531,9 +517,6 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 	});
 
 	test("Claude Code history — resolves against runtime USERPROFILE, not module-load HOME", () => {
-		// Regression: discoverClaudeCodeHistory (used as both discover and
-		// discoverWindows for claude_code_history) must read homedir() at call
-		// time so tests can override USERPROFILE. See Cursor review on PR #26.
 		const home = process.env.USERPROFILE as string;
 		const projects = path.join(home, ".claude", "projects");
 		mkdirSync(projects, { recursive: true });
@@ -542,5 +525,27 @@ describe.skipIf(!isWindows)("Windows discovery helpers", () => {
 			(s) => s.connector === "claude_code_history",
 		);
 		expect(spec?.discoverWindows?.()).toBe(projects);
+	});
+});
+
+describe("parseEnableList", () => {
+	test("returns null for undefined", () => {
+		expect(parseEnableList(undefined)).toBeNull();
+	});
+
+	test("returns null for 'all'", () => {
+		expect(parseEnableList("all")).toBeNull();
+	});
+
+	test("trims, lowercases, and splits connectors", () => {
+		expect(parseEnableList(" Notes, SAFARI ,imessage ")).toEqual([
+			"notes",
+			"safari",
+			"imessage",
+		]);
+	});
+
+	test("drops empty connector values", () => {
+		expect(parseEnableList("notes,, ,safari, ")).toEqual(["notes", "safari"]);
 	});
 });

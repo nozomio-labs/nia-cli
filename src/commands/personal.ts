@@ -1290,7 +1290,7 @@ function groupByTier(
 	return groups;
 }
 
-function parseEnableList(raw: string | undefined): string[] | null {
+export function parseEnableList(raw: string | undefined): string[] | null {
 	if (!raw || raw === "all") return null; // null = all known
 	return raw
 		.split(",")

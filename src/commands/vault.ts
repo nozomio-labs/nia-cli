@@ -588,7 +588,7 @@ const searchCommand = app
 //                                  right install command.
 // ---------------------------------------------------------------------------
 
-function vaultSlug(displayName: string): string {
+export function vaultSlug(displayName: string): string {
 	const cleaned = (displayName || "nia")
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "-")
@@ -596,7 +596,7 @@ function vaultSlug(displayName: string): string {
 	return cleaned || "nia";
 }
 
-function generateVaultBashExamples(vaultId: string): string {
+export function generateVaultBashExamples(vaultId: string): string {
 	return `\`\`\`bash
 # Tree the vault
 nia sources tree ${vaultId}
@@ -633,7 +633,10 @@ nia vault info ${vaultId}     # poll workflow status
 \`\`\``;
 }
 
-function generateVaultAgentsMd(vaultId: string, displayName: string): string {
+export function generateVaultAgentsMd(
+	vaultId: string,
+	displayName: string,
+): string {
 	const safe = displayName || "Nia";
 	return `## ${safe} Vault
 
@@ -653,7 +656,10 @@ ${generateVaultBashExamples(vaultId)}
 `;
 }
 
-function generateVaultSkillMd(vaultId: string, displayName: string): string {
+export function generateVaultSkillMd(
+	vaultId: string,
+	displayName: string,
+): string {
 	const safe = displayName || "Nia";
 	const slug = vaultSlug(displayName);
 	return `---
@@ -699,7 +705,10 @@ When you write to a vault file from a bash session or via \`nia sources write\`,
 `;
 }
 
-function generateVaultSetupMd(vaultId: string, displayName: string): string {
+export function generateVaultSetupMd(
+	vaultId: string,
+	displayName: string,
+): string {
 	const safe = displayName || "Nia";
 	const slug = vaultSlug(displayName);
 	return `# ${safe} Vault — Setup
@@ -855,7 +864,7 @@ const PROJECT_INSTRUCTIONS_CANDIDATES = [
 	"CURSOR.md",
 ] as const;
 
-async function detectProjectInstructionsFile(): Promise<string | null> {
+export async function detectProjectInstructionsFile(): Promise<string | null> {
 	const fs = await import("node:fs");
 	for (const candidate of PROJECT_INSTRUCTIONS_CANDIDATES) {
 		try {
