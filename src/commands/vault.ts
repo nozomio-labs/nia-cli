@@ -268,20 +268,68 @@ const addSourceCommand = app
 		{
 			name: "source-id",
 			type: "string",
-			description: "Indexed source ID to add",
-			required: true,
+			description:
+				"Indexed source ID to add (omit when using --all)",
 		},
 	] as const)
+	.flags({
+		all: {
+			type: "boolean",
+			description:
+				"Add every available indexed source to the vault",
+		},
+	})
 	.run(async ({ args, flags }) => {
 		const fmt = createOutput({ color: flags.color });
 		await withErrorHandling({ domain: "Vault" }, async () => {
-			const result = await vaultFetch(
-				"POST",
-				`/${args.id}/sources`,
-				flags["api-key"],
-				{ source_id: args["source-id"] },
-			);
-			fmt.output(result);
+			if (flags.all) {
+				const available = (await vaultFetch(
+					"GET",
+					"/available-sources",
+					flags["api-key"],
+					undefined,
+					{ limit: 500 },
+				)) as { sources?: { id: string }[] };
+
+				const sourceIds = available?.sources ?? [];
+				if (sourceIds.length === 0) {
+					fmt.output({ message: "No available sources found" });
+					return;
+				}
+
+				let added = 0;
+				for (const source of sourceIds) {
+					try {
+						await vaultFetch(
+							"POST",
+							`/${args.id}/sources`,
+							flags["api-key"],
+							{ source_id: source.id },
+						);
+						added++;
+					} catch {
+						fmt.output({
+							warning: `Failed to add source ${source.id}, skipping`,
+						});
+					}
+				}
+				fmt.output({
+					message: `Added ${added} of ${sourceIds.length} available sources`,
+				});
+			} else {
+				if (!args["source-id"]) {
+					throw new Error(
+						"source-id argument is required (or use --all to add every source)",
+					);
+				}
+				const result = await vaultFetch(
+					"POST",
+					`/${args.id}/sources`,
+					flags["api-key"],
+					{ source_id: args["source-id"] },
+				);
+				fmt.output(result);
+			}
 		});
 	});
 
