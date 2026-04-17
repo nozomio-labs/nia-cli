@@ -1,10 +1,10 @@
 import { annotate } from "@crustjs/skills";
 import type {
-	CategoryAssignRequest,
 	routes__v2__categories__CategoryCreate,
 	routes__v2__categories__CategoryUpdate,
+	SourceUpdateRequest,
 } from "nia-ai-ts";
-import { V2ApiCategoriesService, V2ApiDataSourcesService } from "nia-ai-ts";
+import { V2ApiCategoriesService, V2ApiSourcesService } from "nia-ai-ts";
 import { app } from "../app.ts";
 import { createSdk } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
@@ -242,11 +242,11 @@ const assignCommand = app
 		await withErrorHandling({ domain: "Category" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
 
-			const payload: CategoryAssignRequest = {
+			const payload: SourceUpdateRequest = {
 				category_id: isUnassign ? null : categoryId,
 			};
 
-			await V2ApiDataSourcesService.assignDataSourceCategoryV2DataSourcesSourceIdCategoryPatch(
+			await V2ApiSourcesService.updateSourceV2SourcesSourceIdPatch(
 				sourceId,
 				payload,
 			);

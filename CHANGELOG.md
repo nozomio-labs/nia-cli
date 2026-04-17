@@ -1,5 +1,70 @@
 # nia-cli
 
+## 0.3.2
+
+### Patch Changes
+
+- 51e279b: Fix `nia categories assign` so it works for repository sources, not just data sources. The command now uses the unified `PATCH /v2/sources/{id}` endpoint, which routes correctly to repos, docs, papers, and datasets in a single call.
+
+## 0.3.1
+
+### Patch Changes
+
+- Add `--llms-txt-strategy` flag to `nia sources index` command
+
+  Users can now control how llms.txt is used during documentation indexing:
+
+  - `prefer` (default) — use llms.txt URLs and supplement with crawled pages
+  - `only` — use only URLs from llms.txt
+  - `ignore` — skip llms.txt entirely and rely on crawling
+
+## 0.3.0
+
+### Minor Changes
+
+- 80b641c: Typed personal-data extractors and SQLite WAL fix for macOS databases
+
+  **Core fix**: SQLite databases in WAL mode (iMessage, Notes, WhatsApp, etc.) failed with "unable to open database file" because only the main `.db` file was copied to temp — missing the `-wal` and `-shm` companions. Additionally, opening the copy with `readonly: true` prevented WAL recovery. Both issues are now fixed in `extractors/shared.ts`.
+
+  **New typed extractors** for 7 macOS personal-data sources, each with schema-aware column selection and structured output:
+
+  - WhatsApp — chat history with sender/group metadata
+  - Apple Notes — folders, notes, and attachment metadata
+  - Apple Contacts — names, emails, phones, organizations
+  - Apple Reminders — lists, items, due dates, completion state
+  - Apple Podcasts — subscriptions, listening history, episode metadata
+  - Apple Photos (metadata) — faces, places, dates, albums
+  - Screen Time / knowledgeC — app launches, web visits, focus modes
+
+  **Other improvements**:
+
+  - `nia local doctor` command for diagnosing extraction issues
+  - Error classification in sync output (permission errors vs database errors vs extraction failures)
+  - Schema-adaptive extractors for Photos and Reminders that handle varying column names across macOS versions
+  - Temp SQLite copy cleanup on extraction failure
+
+## 0.2.3
+
+### Patch Changes
+
+- Pin CI bun version to 1.3.11 to fix broken cross-compiled binaries (bun 1.3.12 produces hanging darwin-arm64 binaries)
+
+## 0.2.2
+
+### Patch Changes
+
+- Fix broken 0.2.1 binary that hangs on all commands
+
+## 0.2.1
+
+### Patch Changes
+
+- 196dd76: Add dream cycle commands and update vault templates
+
+  - `nia vault dream <id>` — self-improving dream cycle that discovers entities, finds cross-source connections, detects contradictions, and writes dream-report.md
+  - `nia vault auto-dream <id> on|off` — toggle weekly automatic dream cycle (Sunday 3am UTC)
+  - Updated agent instruction templates (agents md + skill md) with dream report, compiled truth + timeline page structure, and typed wikilinks documentation
+
 ## 0.2.0
 
 ### Minor Changes

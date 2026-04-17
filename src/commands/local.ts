@@ -1,4 +1,10 @@
-import { existsSync, statSync } from "node:fs";
+import {
+	accessSync,
+	existsSync,
+	constants as fsConstants,
+	statSync,
+} from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { annotate } from "@crustjs/skills";
 import { app } from "../app.ts";
@@ -461,6 +467,85 @@ const watcherStatusCommand = app
 		});
 	});
 
+const DOCTOR_PATHS: Record<string, string> = {
+	imessage: path.join(homedir(), "Library/Messages/chat.db"),
+	safari_history: path.join(homedir(), "Library/Safari/History.db"),
+	chrome_history: path.join(
+		homedir(),
+		"Library/Application Support/Google/Chrome/Default/History",
+	),
+	whatsapp: path.join(
+		homedir(),
+		"Library/Group Containers/group.net.whatsapp.WhatsApp.shared/ChatStorage.sqlite",
+	),
+	notes: path.join(
+		homedir(),
+		"Library/Group Containers/group.com.apple.notes/NoteStore.sqlite",
+	),
+	screen_time: path.join(
+		homedir(),
+		"Library/Application Support/Knowledge/knowledgeC.db",
+	),
+	photos: path.join(
+		homedir(),
+		"Pictures/Photos Library.photoslibrary/database/Photos.sqlite",
+	),
+	podcasts: path.join(
+		homedir(),
+		"Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Documents/MTLibrary.sqlite",
+	),
+};
+
+const doctorCommand = app
+	.sub("doctor")
+	.meta({ description: "Run diagnostics for local data source access" })
+	.run(async ({ flags }) => {
+		const fmt = createOutput({ color: flags.color });
+
+		await withErrorHandling({ domain: "Doctor" }, async () => {
+			const checks: Array<{ source: string; status: string; detail: string }> =
+				[];
+
+			try {
+				const sources = await listLocalSources(flags["api-key"]);
+				checks.push({
+					source: "API",
+					status: "OK",
+					detail: `${sources.length} source(s) found`,
+				});
+			} catch (err) {
+				checks.push({
+					source: "API",
+					status: "FAIL",
+					detail: err instanceof Error ? err.message : "Connection failed",
+				});
+			}
+
+			for (const [name, dbPath] of Object.entries(DOCTOR_PATHS)) {
+				if (!existsSync(dbPath)) {
+					checks.push({
+						source: name,
+						status: "SKIP",
+						detail: "Not installed",
+					});
+					continue;
+				}
+				try {
+					accessSync(dbPath, fsConstants.R_OK);
+					checks.push({ source: name, status: "OK", detail: dbPath });
+				} catch {
+					checks.push({
+						source: name,
+						status: "FAIL",
+						detail: "Permission denied — grant Full Disk Access",
+					});
+				}
+			}
+
+			fmt.output(checks);
+		});
+	});
+
 export const localCommand = annotate(
 	app
 		.sub("local")
@@ -473,7 +558,8 @@ export const localCommand = annotate(
 		.command(watchCommand)
 		.command(installWatcherCommand)
 		.command(uninstallWatcherCommand)
-		.command(watcherStatusCommand),
+		.command(watcherStatusCommand)
+		.command(doctorCommand),
 	[
 		"Use `nia local add <path>` to register a folder and `nia local sync` for a one-time push.",
 		"Use `nia local watch` to keep linked folders synced continuously.",

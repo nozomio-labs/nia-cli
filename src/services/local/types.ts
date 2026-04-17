@@ -1,4 +1,5 @@
 export interface FolderCursor {
+	[key: string]: unknown;
 	last_mtime?: number;
 	last_path?: string;
 	cursor_version?: number;
@@ -31,7 +32,7 @@ export interface LocalFileItem {
 
 export interface SyncExtractionResult {
 	files: LocalFileItem[];
-	cursor: FolderCursor;
+	cursor: Record<string, unknown>;
 	stats: Record<string, unknown>;
 }
 
@@ -42,7 +43,7 @@ export interface SyncResult {
 	chunks_indexed?: number;
 	message?: string;
 	error?: string;
-	new_cursor?: FolderCursor;
+	new_cursor?: Record<string, unknown>;
 }
 
 export interface LocalSyncUploadPayload {
