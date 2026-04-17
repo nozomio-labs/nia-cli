@@ -1,6 +1,6 @@
-import { password } from "@crustjs/prompts";
 import { annotate } from "@crustjs/skills";
 import { app } from "../app.ts";
+import { runBrowserDeviceLogin } from "../services/auth/browser-login.ts";
 import {
 	normalizeUsageSummary,
 	printCliUsage,
@@ -16,27 +16,29 @@ import { withErrorHandling } from "../utils/errors.ts";
 
 const loginCommand = app
 	.sub("login")
-	.meta({ description: "Authenticate with the Nia platform" })
+	.meta({
+		description:
+			"Authenticate with the Nia platform (browser sign-in, or pass --api-key)",
+	})
 	.flags({
 		"api-key": {
 			type: "string",
-			description: "API key (for non-interactive/CI use)",
+			description:
+				"API key (skips browser — use for manual entry or non-interactive/CI)",
 		},
 	})
 	.run(async ({ flags }) => {
 		let apiKey = flags["api-key"];
 
 		if (!apiKey) {
-			if (!process.stdout.isTTY) {
+			const canPrompt = process.stdout.isTTY && process.stdin.isTTY;
+			if (!canPrompt) {
 				console.error("Non-interactive mode requires --api-key <value>");
 				console.error("Example: nia auth login --api-key nia_your_api_key");
 				process.exit(1);
 			}
 
-			apiKey = await password({
-				message: "Enter your Nia API key:",
-			});
-
+			apiKey = await runBrowserDeviceLogin();
 			if (!apiKey) {
 				console.error("No API key provided. Aborting.");
 				process.exit(1);
@@ -145,7 +147,9 @@ export const authCommand = annotate(
 		.command(logoutCommand)
 		.command(statusCommand),
 	[
-		"Run `nia auth login` to authenticate interactively, or `nia auth login --api-key <key>` for CI.",
+		"Interactive login opens the browser; after a timeout, you can paste an API key. Override wait with `NIA_AUTH_BROWSER_TIMEOUT_MS` (ms).",
+		"Pass `--api-key` to skip the browser and set a key directly (including in CI).",
+		"Device flow uses `NIA_BACKEND_URL` / `NIA_APP_URL` when set.",
 		"The `NIA_API_KEY` environment variable can also be used and takes precedence over stored config.",
 		"Use `nia auth status` to check current authentication state and plan info.",
 	],
