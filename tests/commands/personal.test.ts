@@ -14,8 +14,8 @@ import {
 	isApplicableToCurrentPlatform,
 	PERSONAL_SOURCES,
 	type PersonalSourceSpec,
+	parseEnableList,
 	resolvePlatformSources,
-	parseEnableList,               
 } from "../../src/commands/personal.ts";
 
 const isWindows = process.platform === "win32";
