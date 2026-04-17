@@ -268,15 +268,13 @@ const addSourceCommand = app
 		{
 			name: "source-id",
 			type: "string",
-			description:
-				"Indexed source ID to add (omit when using --all)",
+			description: "Indexed source ID to add (omit when using --all)",
 		},
 	] as const)
 	.flags({
 		all: {
 			type: "boolean",
-			description:
-				"Add every available indexed source to the vault",
+			description: "Add every available indexed source to the vault",
 		},
 	})
 	.run(async ({ args, flags }) => {
@@ -300,12 +298,9 @@ const addSourceCommand = app
 				let added = 0;
 				for (const source of sourceIds) {
 					try {
-						await vaultFetch(
-							"POST",
-							`/${args.id}/sources`,
-							flags["api-key"],
-							{ source_id: source.id },
-						);
+						await vaultFetch("POST", `/${args.id}/sources`, flags["api-key"], {
+							source_id: source.id,
+						});
 						added++;
 					} catch {
 						fmt.output({
