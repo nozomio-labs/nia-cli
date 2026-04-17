@@ -420,8 +420,7 @@ export function discoverChromeHistoryWindows(): string | null {
 		const na = parseInt(a.slice("Profile ".length), 10);
 		const nb = parseInt(b.slice("Profile ".length), 10);
 		return (
-			(Number.isNaN(na) ? Infinity : na) -
-			(Number.isNaN(nb) ? Infinity : nb)
+			(Number.isNaN(na) ? Infinity : na) - (Number.isNaN(nb) ? Infinity : nb)
 		);
 	};
 	for (const entry of safeListDir(userData).sort(byProfileNumber)) {
