@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.3.2
+
+### Patch Changes
+
+- 51e279b: Fix `nia categories assign` so it works for repository sources, not just data sources. The command now uses the unified `PATCH /v2/sources/{id}` endpoint, which routes correctly to repos, docs, papers, and datasets in a single call.
+
 ## 0.3.1
 
 ### Patch Changes
