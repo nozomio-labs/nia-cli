@@ -96,12 +96,27 @@ const listCommand = app
 			type: "number",
 			description: "Offset for pagination",
 		},
+		all: {
+			type: "boolean",
+			default: false,
+			description:
+				"Fetch every page exhaustively. Use this instead of piping through `head` / `tail` when discovering repositories at scale.",
+		},
 	})
 	.run(async ({ flags }) => {
 		const fmt = createOutput({ color: flags.color });
 
 		await withErrorHandling({ domain: "Repository" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
+
+			if (flags.all) {
+				const items = await fetchAllRepositories({
+					query: flags.query,
+					status: flags.status,
+				});
+				fmt.output(items);
+				return;
+			}
 
 			const result =
 				await V2ApiRepositoriesService.listRepositoriesV2V2RepositoriesGet(
@@ -114,6 +129,36 @@ const listCommand = app
 			fmt.output(result);
 		});
 	});
+
+/**
+ * Page exhaustively through `V2ApiRepositoriesService.listRepositoriesV2V2RepositoriesGet`
+ * until a page returns fewer items than the requested size. Page size and cap
+ * mirror the analogous helper in `commands/sources.ts`.
+ */
+async function fetchAllRepositories(params: {
+	query?: string;
+	status?: string;
+}): Promise<unknown[]> {
+	const pageSize = 100;
+	const maxPages = 50;
+	const items: unknown[] = [];
+	for (let page = 0; page < maxPages; page++) {
+		const offset = page * pageSize;
+		const result =
+			await V2ApiRepositoriesService.listRepositoriesV2V2RepositoriesGet(
+				params.query,
+				params.status,
+				pageSize,
+				offset,
+			);
+		const batch = Array.isArray(result) ? result : [];
+		items.push(...batch);
+		if (batch.length < pageSize) {
+			return items;
+		}
+	}
+	return items;
+}
 
 const statusCommand = app
 	.sub("status")
@@ -503,5 +548,6 @@ export const reposCommand = annotate(
 		"Use for managing and searching GitHub repositories that have been indexed by Nia.",
 		"For live GitHub access without indexing, use `nia github` instead.",
 		"Prefer `tree` before `read`/`grep` to understand repository structure.",
+		"For source DISCOVERY, prefer `nia project status` (if a `nia.json` is present) or `nia sources summary`. Only run `nia repos list --all` when you genuinely need to enumerate every repo — never pipe through `head` / `tail`, you'll miss matches.",
 	],
 );

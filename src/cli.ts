@@ -24,6 +24,7 @@ import { oracleCommand } from "./commands/oracle";
 import { packagesCommand } from "./commands/packages";
 import { papersCommand } from "./commands/papers";
 import { personalCommand } from "./commands/personal";
+import { projectCommand } from "./commands/project";
 import { reposCommand } from "./commands/repos";
 import { searchCommand } from "./commands/search";
 import { slackCommand } from "./commands/slack";
@@ -68,6 +69,7 @@ const main = app
 	.command(githubCommand)
 	.command(localCommand)
 	.command(personalCommand)
+	.command(projectCommand)
 	.command(papersCommand)
 	.command(datasetsCommand)
 	.command(categoriesCommand)
@@ -97,6 +99,24 @@ const main = app
 			version: pkg.version,
 			defaultScope: "global",
 			instructions: `
+### Step 0 — check for nia.json (HIGHEST PRIORITY, do this first)
+
+**If the cwd or any parent directory contains a \`nia.json\` file, that is the canonical source list for this project.** Treat its \`sources\`, \`vaults\`, and \`local\` bindings as the working set for the entire conversation.
+
+- **Do NOT run \`nia sources list\` or \`nia repos list\` to discover sources.** The manifest already declared them. At 100+ globally-indexed sources, listing-and-grepping misses the right one (especially when piped through \`head\` / \`tail\`).
+- **Use \`nia search query "..."\` with no \`--repos\`/\`--docs\`/\`--local-folders\` flags.** The CLI auto-injects the bound source ids and prints a transparent stderr line like \`Using nia.json scope: 3 repos, 1 doc, 1 local folder\`. That's the confirmation that the scope was applied — you don't need to verify any other way.
+- **To see what's bound, run \`nia project status\`** (NOT \`nia sources list\`). It prints per-source health (indexed / pending / orphaned / not_found).
+- **Only fall back to discovery if the user explicitly asks about something outside the bound set.** Then use \`nia sources summary\` first (compact), and \`nia sources list --all\` / \`nia repos list --all\` if you genuinely need to enumerate every source.
+
+**If no \`nia.json\` exists** and the user is starting work in a new project, suggest \`nia project init\`. It's a one-shot command that:
+1. Picks indexed sources interactively (or pass \`--yes\` for empty manifest).
+2. Runs \`nia local add .\` so the project's own files are searchable too.
+3. Appends a \`## Nia (project-scoped)\` block to CLAUDE.md / AGENTS.md.
+
+After that, every \`nia search query\` from this directory tree auto-scopes — no \`--repos\` flags ever again.
+
+To bypass the auto-scope for a single query (e.g. searching outside the project's bound set), pass \`--no-scope\`.
+
 ### Nia Workflow
 
 **Use indexed Nia sources first. Web is the fallback, not the default.**
@@ -106,13 +126,16 @@ const main = app
 1. **Never use web fetch or run** \`nia search web\` **or** \`nia search deep\` **before checking whether the source already exists in Nia.**
 2. If the user names a repo, doc site, paper, or dataset, treat it as a **known source** and stay inside Nia first.
 3. Do not skip to web because it seems faster. Indexed Nia content is usually more complete and reliable.
+4. **Never pipe \`nia sources list\` or \`nia repos list\` through \`head\` / \`tail\`** — at scale you will silently miss the right source. If you must enumerate, pass \`--all\` (paginates through every result) instead.
 
 #### Required Workflow
 
 1. **Check what exists already**
-   - Use \`nia repos list\`, \`nia sources list\`, \`nia sources summary\`, or \`nia sources resolve <identifier>\`.
+   - **First, look for \`nia.json\`** in cwd or parents (Step 0 above). If present, you already have the working set.
+   - Otherwise, use \`nia sources summary\` for a compact inventory (counts + top-5 names per type), or \`nia sources resolve <identifier>\` to look up a specific name/URL.
+   - Only run \`nia repos list --all\` / \`nia sources list --all\` when you truly need every source.
 2. **If the source is already indexed, search inside Nia**
-   - Use \`nia search query\` or \`nia search universal\` for answers.
+   - Use \`nia search query\` or \`nia search universal\` for answers. \`nia search query\` auto-scopes to \`nia.json\` when present.
    - Use \`nia repos tree\`, \`nia repos grep\`, \`nia repos read\`, \`nia sources tree\`, \`nia sources ls\`, \`nia sources grep\`, and \`nia sources read\` for direct inspection.
    - Use \`nia document agent <source-id> "question"\` to ask AI questions about indexed PDFs/documents with citations.
 3. **If the source is not indexed but the identifier is known, index it first**
@@ -418,11 +441,13 @@ This is **per-vault**, in addition to this global \`nia\` skill which teaches yo
 
 #### Defaults
 
+- **Always check for \`nia.json\` first** (Step 0 above). It's the per-project source binding. \`nia search query\` auto-scopes when present.
 - Use \`nia search query\` for targeted questions about specific repos, docs, papers, datasets, or local folders.
 - For docs, index the **root URL**, not a single page. Example: \`https://docs.stripe.com\`.
 - Most commands accept flexible identifiers such as UUID, display name, or URL.
 - Use \`nia sources subscribe <url>\` for instant access to already-indexed global sources.
 - For multi-source research that should compound across sessions, suggest a vault: \`nia vault create\` then \`nia vault ingest\`. See "Knowledge Base Vaults" above.
+- For source enumeration at scale, use \`--all\` (e.g. \`nia sources list --all\`) instead of piping through \`head\` or \`tail\`. Pagination misses are the #1 cause of "agent picked the wrong source" bugs.
 			`,
 		}),
 	);

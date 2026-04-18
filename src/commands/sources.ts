@@ -305,6 +305,12 @@ const listCommand = app
 			type: "number",
 			description: "Offset for pagination",
 		},
+		all: {
+			type: "boolean",
+			default: false,
+			description:
+				"Fetch every page exhaustively. Use this instead of piping through `head` / `tail` when discovering sources at scale (100+).",
+		},
 	})
 	.run(async ({ flags }) => {
 		const fmt = createOutput({ color: flags.color });
@@ -313,6 +319,17 @@ const listCommand = app
 
 		await withErrorHandling({ domain: "Source" }, async () => {
 			const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+
+			if (flags.all) {
+				const items = await fetchAllSources(cliSdk, {
+					type: sourceType,
+					query: flags.query,
+					status: flags.status,
+					categoryId: flags.category,
+				});
+				fmt.output(items);
+				return;
+			}
 
 			const result = await cliSdk.sources.list({
 				type: sourceType,
@@ -326,6 +343,60 @@ const listCommand = app
 			fmt.output(result);
 		});
 	});
+
+/**
+ * Page exhaustively through `cliSdk.sources.list` until the API returns fewer
+ * items than the requested page size (i.e. we've hit the end). Returns a flat
+ * array of items so the caller can render it as a single list. The page size
+ * is intentionally large (100) to minimize round-trips for users with many
+ * sources, while staying small enough to avoid request timeouts.
+ *
+ * Defends against pathological responses by capping at 50 pages — at 100
+ * items per page that's 5,000 sources, which is well above any realistic
+ * user. If you hit the cap, something's wrong upstream.
+ */
+async function fetchAllSources(
+	cliSdk: Awaited<ReturnType<typeof createCliSdk>>,
+	params: {
+		type?: ReturnType<typeof validateSourceType>;
+		query?: string;
+		status?: string;
+		categoryId?: string;
+	},
+): Promise<unknown[]> {
+	const pageSize = 100;
+	const maxPages = 50;
+	const items: unknown[] = [];
+	for (let page = 0; page < maxPages; page++) {
+		const offset = page * pageSize;
+		const result = await cliSdk.sources.list({
+			...params,
+			limit: pageSize,
+			offset,
+		});
+
+		const batch = extractItems(result);
+		items.push(...batch);
+		if (batch.length < pageSize) {
+			return items;
+		}
+	}
+	return items;
+}
+
+function extractItems(result: unknown): unknown[] {
+	if (Array.isArray(result)) {
+		return result;
+	}
+	if (
+		result &&
+		typeof result === "object" &&
+		Array.isArray((result as { items?: unknown[] }).items)
+	) {
+		return (result as { items: unknown[] }).items;
+	}
+	return [];
+}
 
 const getCommand = app
 	.sub("get")
@@ -942,6 +1013,12 @@ const exploreCommand = annotate(
 				type: "number",
 				description: "Offset for pagination",
 			},
+			all: {
+				type: "boolean",
+				default: false,
+				description:
+					"Fetch every page exhaustively. Use this instead of piping through `head` / `tail`.",
+			},
 		})
 		.run(async ({ flags }) => {
 			const fmt = createOutput({ color: flags.color });
@@ -949,6 +1026,17 @@ const exploreCommand = annotate(
 
 			await withErrorHandling({ domain: "Source" }, async () => {
 				const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
+
+				if (flags.all) {
+					const items = await fetchAllExploreItems(cliSdk, {
+						search: flags.query,
+						sourceType,
+						sort: flags.sort ?? "most_subscribed",
+					});
+					fmt.output(items);
+					return;
+				}
+
 				const result = await cliSdk.sources.explore({
 					search: flags.query,
 					sourceType,
@@ -963,8 +1051,42 @@ const exploreCommand = annotate(
 		"Browse the global catalog of publicly indexed sources.",
 		"Use `--query` to search by name, URL, or description.",
 		"Subscribe to a source with `nia sources subscribe <url>` for instant access.",
+		"Use `--all` to page through every result instead of piping through `head` / `tail`.",
 	],
 );
+
+/**
+ * Same exhaustive-pagination contract as `fetchAllSources`, applied to the
+ * global-catalog explore endpoint. Page size and cap mirror the source list
+ * version for consistency.
+ */
+async function fetchAllExploreItems(
+	cliSdk: Awaited<ReturnType<typeof createCliSdk>>,
+	params: {
+		search?: string;
+		sourceType?: ReturnType<typeof validateSourceType>;
+		sort?: string;
+	},
+): Promise<unknown[]> {
+	const pageSize = 100;
+	const maxPages = 50;
+	const items: unknown[] = [];
+	for (let page = 0; page < maxPages; page++) {
+		const offset = page * pageSize;
+		const result = await cliSdk.sources.explore({
+			...params,
+			limit: pageSize,
+			offset,
+		});
+
+		const batch = extractItems(result);
+		items.push(...batch);
+		if (batch.length < pageSize) {
+			return items;
+		}
+	}
+	return items;
+}
 
 const writeCommand = app
 	.sub("write")
@@ -1364,5 +1486,6 @@ export const sourcesCommand = annotate(
 		"Most commands accept flexible identifiers: UUID, display name, or URL.",
 		"Use `list` to check what's already indexed before indexing new sources.",
 		"Use `tree` and `ls` to explore source structure, then `read` and `grep` for content.",
+		"For source DISCOVERY at scale, prefer `nia project status` (if a `nia.json` exists in the project) or `nia sources summary`. If you must enumerate every source, use `nia sources list --all` instead of piping through `head` / `tail` — pagination misses are the #1 source of 'agent picked the wrong source' bugs.",
 	],
 );

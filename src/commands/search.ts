@@ -1,5 +1,6 @@
 import { annotate } from "@crustjs/skills";
 import { app } from "../app.ts";
+import { type ProjectScope, resolveScope } from "../services/project.ts";
 import {
 	type CliSandboxGitProvider,
 	type CliSandboxSearchBody,
@@ -46,6 +47,93 @@ function splitCsvFlag(value: string | undefined): string[] {
 		.split(",")
 		.map((item) => item.trim())
 		.filter((item) => item.length > 0);
+}
+
+/**
+ * Resolve project scope (`nia.json`) and merge bound sources into the
+ * provided source filters when the user didn't pass any of `--repos`,
+ * `--docs`, or `--local-folders`. Returns the merged filter strings plus the
+ * scope itself for transparent stderr reporting.
+ *
+ * The contract:
+ *   - User-provided flags ALWAYS take precedence. If any are set, the
+ *     manifest is ignored entirely (don't second-guess explicit intent).
+ *   - `--no-scope` disables auto-scoping even when no flags are passed.
+ *   - When auto-scope kicks in, we also tell the caller via the returned
+ *     `scope` object so they can print a transparent line to stderr:
+ *
+ *         Using nia.json scope: 3 repos, 1 doc, 1 local folder (./nia.json)
+ */
+export interface AutoScopeInput {
+	repos?: string;
+	docs?: string;
+	localFolders?: string;
+	noScope?: boolean;
+}
+
+export interface AutoScopeResult {
+	repos?: string;
+	docs?: string;
+	localFolders?: string;
+	scope: ProjectScope | null;
+	scopeApplied: boolean;
+}
+
+export function applyProjectScope(input: AutoScopeInput): AutoScopeResult {
+	const userPassedFilters = Boolean(
+		input.repos?.trim() || input.docs?.trim() || input.localFolders?.trim(),
+	);
+
+	if (userPassedFilters || input.noScope) {
+		return {
+			repos: input.repos,
+			docs: input.docs,
+			localFolders: input.localFolders,
+			scope: null,
+			scopeApplied: false,
+		};
+	}
+
+	const scope = resolveScope();
+	if (!scope) {
+		return {
+			repos: input.repos,
+			docs: input.docs,
+			localFolders: input.localFolders,
+			scope: null,
+			scopeApplied: false,
+		};
+	}
+
+	return {
+		repos: scope.repos.length > 0 ? scope.repos.join(",") : undefined,
+		docs: scope.docs.length > 0 ? scope.docs.join(",") : undefined,
+		localFolders:
+			scope.localFolders.length > 0 ? scope.localFolders.join(",") : undefined,
+		scope,
+		scopeApplied:
+			scope.repos.length > 0 ||
+			scope.docs.length > 0 ||
+			scope.localFolders.length > 0,
+	};
+}
+
+function describeScope(scope: ProjectScope): string {
+	const parts: string[] = [];
+	if (scope.repos.length > 0) {
+		parts.push(
+			`${scope.repos.length} repo${scope.repos.length === 1 ? "" : "s"}`,
+		);
+	}
+	if (scope.docs.length > 0) {
+		parts.push(`${scope.docs.length} doc${scope.docs.length === 1 ? "" : "s"}`);
+	}
+	if (scope.localFolders.length > 0) {
+		parts.push(
+			`${scope.localFolders.length} local folder${scope.localFolders.length === 1 ? "" : "s"}`,
+		);
+	}
+	return parts.length > 0 ? parts.join(", ") : "(empty)";
 }
 
 function sanitizeSandboxFinalPayloadForTTY(
@@ -169,6 +257,21 @@ const universalCommand = annotate(
 				async () => {
 					const sdk = await createSdk({ apiKey: flags["api-key"] });
 
+					// Universal search has no source-id filter, so we can't auto-scope
+					// the way `query` does. The most useful thing is to nudge the user
+					// when a manifest exists: `nia search query` will respect it.
+					const scope = resolveScope();
+					if (
+						scope &&
+						(scope.repos.length > 0 ||
+							scope.docs.length > 0 ||
+							scope.localFolders.length > 0)
+					) {
+						fmt.info(
+							`nia.json detected (${scope.manifestPath}) — \`nia search universal\` searches across all indexed sources, ignoring the project scope. Use \`nia search query\` to auto-scope.`,
+						);
+					}
+
 					const params: Record<string, unknown> = {
 						query: args.query,
 					};
@@ -193,6 +296,7 @@ const universalCommand = annotate(
 		"Hybrid vector + BM25 search across all indexed public sources (repos, docs, HF datasets).",
 		"Does NOT include Slack workspaces. Use `nia search query` for Slack-inclusive search.",
 		"Good default when you want a broad search across everything indexed.",
+		"Universal search ignores `nia.json` scope — it's intentionally broad. Use `nia search query` when you want the project's bound sources only.",
 	],
 );
 
@@ -222,6 +326,12 @@ const queryCommand = annotate(
 			"local-folders": {
 				type: "string",
 				description: "Local folder IDs or names to search (comma-separated)",
+			},
+			scope: {
+				type: "boolean",
+				default: true,
+				description:
+					"Auto-scope from `nia.json` when no source filters are passed (default: true). Pass `--no-scope` to bypass and search beyond the project's bound sources.",
 			},
 			category: {
 				type: "string",
@@ -260,17 +370,31 @@ const queryCommand = annotate(
 				async () => {
 					const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
 
+					// Auto-scope from nia.json when no source filters were passed and
+					// --no-scope wasn't set. User-provided filters always win.
+					const scoped = applyProjectScope({
+						repos: flags.repos,
+						docs: flags.docs,
+						localFolders: flags["local-folders"],
+						noScope: flags.scope === false,
+					});
+					if (scoped.scopeApplied && scoped.scope) {
+						fmt.info(
+							`Using nia.json scope: ${describeScope(scoped.scope)} (${scoped.scope.manifestPath})`,
+						);
+					}
+
 					if (cliSdk.experimental) {
 						const payload = buildExperimentalQuerySearchPayload({
 							query: args.query,
-							repos: flags.repos,
-							docs: flags.docs,
-							localFolders: flags["local-folders"],
+							repos: scoped.repos,
+							docs: scoped.docs,
+							localFolders: scoped.localFolders,
 						});
 
 						if (payload.sources.length === 0) {
 							fmt.error(
-								"Experimental query search requires at least one of --repos, --docs, or --local-folders.",
+								"Experimental query search requires at least one of --repos, --docs, or --local-folders. Pass --no-scope to bypass nia.json, or run `nia project init` to bind sources.",
 							);
 							process.exit(1);
 						}
@@ -300,9 +424,9 @@ const queryCommand = annotate(
 					const params: Record<string, unknown> = {
 						messages: [{ role: "user", content: args.query }],
 					};
-					const repositories = splitCsvFlag(flags.repos);
-					const dataSources = splitCsvFlag(flags.docs);
-					const localFolders = splitCsvFlag(flags["local-folders"]);
+					const repositories = splitCsvFlag(scoped.repos);
+					const dataSources = splitCsvFlag(scoped.docs);
+					const localFolders = splitCsvFlag(scoped.localFolders);
 					if (repositories.length > 0) {
 						params.repositories = repositories;
 					}
@@ -314,9 +438,9 @@ const queryCommand = annotate(
 					}
 					params.search_mode = resolveQuerySearchMode({
 						explicit: flags["search-mode"],
-						repos: flags.repos,
-						docs: flags.docs,
-						localFolders: flags["local-folders"],
+						repos: scoped.repos,
+						docs: scoped.docs,
+						localFolders: scoped.localFolders,
 					});
 					if (flags.category) {
 						params.category = flags.category;
@@ -345,6 +469,7 @@ const queryCommand = annotate(
 		}),
 	[
 		"Targeted search with AI response and sources. Pass repos, docs, and local folders as comma-separated strings.",
+		"Auto-scopes from `nia.json` when present and no source filters were passed. Surfaces a stderr line so the scope is transparent. Pass `--no-scope` to bypass.",
 		"Use `repositories` mode for repo-only search, `sources` mode for docs/local-folders-only search, and `unified` when multiple source types are involved.",
 		"Search mode is auto-detected: `repositories` when only `--repos`, `sources` when only `--docs` or `--local-folders`, `unified` when mixed. Override with `--search-mode` only when needed.",
 		"Use `--skip-llm` to return raw search results without AI synthesis.",
