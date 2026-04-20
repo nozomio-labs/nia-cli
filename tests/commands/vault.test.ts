@@ -18,6 +18,7 @@ let generateVaultBashExamples: typeof import("../../src/commands/vault.ts").gene
 let generateVaultSetupMd: typeof import("../../src/commands/vault.ts").generateVaultSetupMd;
 let generateVaultSkillMd: typeof import("../../src/commands/vault.ts").generateVaultSkillMd;
 let vaultSlug: typeof import("../../src/commands/vault.ts").vaultSlug;
+let fetchAllAvailableVaultSources: typeof import("../../src/commands/vault.ts").fetchAllAvailableVaultSources;
 
 beforeAll(async () => {
 	mock.module("just-bash", () => ({
@@ -35,6 +36,7 @@ beforeAll(async () => {
 	generateVaultSetupMd = mod.generateVaultSetupMd;
 	generateVaultSkillMd = mod.generateVaultSkillMd;
 	vaultSlug = mod.vaultSlug;
+	fetchAllAvailableVaultSources = mod.fetchAllAvailableVaultSources;
 });
 
 afterAll(() => {
@@ -107,5 +109,67 @@ describe("detectProjectInstructionsFile", () => {
 		writeFileSync(path.join(tempDir, "AGENTS.md"), "# agents");
 
 		expect(await detectProjectInstructionsFile()).toBe("AGENTS.md");
+	});
+});
+
+/**
+ * Regression: `vault add-source --all` used to call the `/available-sources`
+ * endpoint with `?limit=500`, which the backend now rejects (`limit <= 100`).
+ * `fetchAllAvailableVaultSources` must page through results using an
+ * injectable fetcher and never send `limit > 100`.
+ */
+describe("fetchAllAvailableVaultSources", () => {
+	test("never requests limit > 100 (API cap regression)", async () => {
+		type Q = Record<string, string | number | undefined> | undefined;
+		const calls: Q[] = [];
+		const fakeFetch = async (query: Q) => {
+			calls.push(query);
+			return { sources: [] };
+		};
+
+		await fetchAllAvailableVaultSources(fakeFetch);
+
+		expect(calls.length).toBeGreaterThan(0);
+		for (const q of calls) {
+			expect(Number(q?.limit ?? 0)).toBeLessThanOrEqual(100);
+		}
+	});
+
+	test("aggregates across pages and passes offset", async () => {
+		type Q = Record<string, string | number | undefined> | undefined;
+		const calls: Q[] = [];
+		const fakeFetch = async (query: Q) => {
+			calls.push(query);
+			const offset = Number(query?.offset ?? 0);
+			if (offset === 0) {
+				return {
+					sources: Array.from({ length: 100 }, (_, i) => ({
+						id: `s-${i}`,
+					})),
+				};
+			}
+			if (offset === 100) {
+				return {
+					sources: Array.from({ length: 45 }, (_, i) => ({
+						id: `s-${100 + i}`,
+					})),
+				};
+			}
+			return { sources: [] };
+		};
+
+		const sources = await fetchAllAvailableVaultSources(fakeFetch);
+
+		expect(sources).toHaveLength(145);
+		expect(calls).toHaveLength(2);
+		expect(Number(calls[0]?.limit)).toBeLessThanOrEqual(100);
+		expect(Number(calls[0]?.offset ?? 0)).toBe(0);
+		expect(Number(calls[1]?.offset)).toBe(100);
+	});
+
+	test("handles empty result set", async () => {
+		const fakeFetch = async () => ({ sources: [] });
+		const sources = await fetchAllAvailableVaultSources(fakeFetch);
+		expect(sources).toEqual([]);
 	});
 });

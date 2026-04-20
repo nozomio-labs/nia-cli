@@ -33,6 +33,7 @@ import { annotate } from "@crustjs/skills";
 import { app } from "../app.ts";
 import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
 import { addLocalSource, listLocalSources } from "../services/local/api.ts";
+import { paginateAll } from "../services/pagination.ts";
 import {
 	addLocalBinding,
 	addSource,
@@ -296,28 +297,44 @@ const initCommand = annotate(
 );
 
 /**
+ * Fetch every indexed source available to the current account, paginated.
+ *
+ * The Nia API enforces `limit <= 100` per request, so we page via the shared
+ * `paginateAll` helper up to a safety ceiling (500 items). This replaces an
+ * earlier single-call `sources.list({ limit: 200 })` that started failing
+ * with `query → limit: Input should be less than or equal to 100`.
+ *
+ * Exported so the pagination contract can be regression-tested directly
+ * without spinning up the full `pickSources` interactive flow.
+ */
+export async function fetchAllSourcesForPicker(cliSdk: {
+	sources: {
+		list: (params?: { limit?: number; offset?: number }) => Promise<unknown>;
+	};
+}): Promise<Array<Record<string, unknown>>> {
+	return paginateAll<Record<string, unknown>>(
+		async ({ limit, offset }) =>
+			(await cliSdk.sources.list({ limit, offset })) as
+				| Array<Record<string, unknown>>
+				| { items?: Array<Record<string, unknown>> }
+				| null
+				| undefined,
+	);
+}
+
+/**
  * Build a multi-select picker from the user's existing sources.
  *
- * Implementation: pulls `cliSdk.sources.list({ limit: 200 })` to get a wide
- * page of indexed sources. We don't need the full set for v1 — the user can
- * always `nia project link` more later — and pulling 200 keeps the picker
- * responsive. We also include local folders via `listLocalSources` so the
- * picker matches what `nia sources summary` would show.
+ * Implementation: pages through `cliSdk.sources.list` via
+ * `fetchAllSourcesForPicker` (capped at 500 items). Users with more sources
+ * than that can always `nia project link` more later. Local folders come
+ * from `listLocalSources` so the picker matches what `nia sources summary`
+ * would show.
  */
 async function pickSources(
 	cliSdk: Awaited<ReturnType<typeof createCliSdk>>,
 ): Promise<string[]> {
-	const sources = (await cliSdk.sources.list({ limit: 200 })) as
-		| { items?: Array<Record<string, unknown>> }
-		| Array<Record<string, unknown>>
-		| null
-		| undefined;
-
-	const items = Array.isArray(sources)
-		? sources
-		: Array.isArray((sources as { items?: unknown[] } | null)?.items)
-			? (sources as { items: Array<Record<string, unknown>> }).items
-			: [];
+	const items = await fetchAllSourcesForPicker(cliSdk);
 
 	if (items.length === 0) {
 		const proceed = await confirm({

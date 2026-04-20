@@ -2,6 +2,7 @@ import { annotate } from "@crustjs/skills";
 import { OpenAPI } from "nia-ai-ts";
 import { app } from "../app.ts";
 import { resolveBaseUrl } from "../services/config.ts";
+import { paginateAll } from "../services/pagination.ts";
 import { createSdk } from "../services/sdk.ts";
 import { createResponseError, withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
@@ -69,6 +70,37 @@ async function vaultFetch(
 		);
 	}
 	return (await response.json()) as Record<string, unknown>;
+}
+
+/**
+ * Shape returned by `GET /vaults/available-sources` — a `{ sources: [...] }`
+ * wrapper. We only need `id` on each entry for the `--all` bulk-add flow.
+ */
+type AvailableVaultSource = { id: string };
+
+/**
+ * Page through `/vaults/available-sources` and return every available
+ * source id. Paginated because the backend now rejects `limit > 100`;
+ * previously this was a single `?limit=500` call which broke
+ * `nia vault add-source --all` with:
+ *
+ *     Validation error: query → limit: Input should be less than or equal to 100
+ *
+ * Accepts an injectable fetcher so this is unit-testable without touching
+ * the network. Production callers pass a closure around `vaultFetch`.
+ */
+export async function fetchAllAvailableVaultSources(
+	fetchAvailable: (
+		query: Record<string, string | number | undefined>,
+	) => Promise<{ sources?: AvailableVaultSource[] } | unknown>,
+): Promise<AvailableVaultSource[]> {
+	return paginateAll<AvailableVaultSource>(async ({ limit, offset }) => {
+		const result = (await fetchAvailable({ limit, offset })) as
+			| { sources?: AvailableVaultSource[] }
+			| null
+			| undefined;
+		return result ?? { sources: [] };
+	});
 }
 
 // ---------------------------------------------------------------------------
@@ -281,15 +313,15 @@ const addSourceCommand = app
 		const fmt = createOutput({ color: flags.color });
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			if (flags.all) {
-				const available = (await vaultFetch(
-					"GET",
-					"/available-sources",
-					flags["api-key"],
-					undefined,
-					{ limit: 500 },
-				)) as { sources?: { id: string }[] };
-
-				const sourceIds = available?.sources ?? [];
+				const sourceIds = await fetchAllAvailableVaultSources((query) =>
+					vaultFetch(
+						"GET",
+						"/available-sources",
+						flags["api-key"],
+						undefined,
+						query,
+					),
+				);
 				if (sourceIds.length === 0) {
 					fmt.output({ message: "No available sources found" });
 					return;
