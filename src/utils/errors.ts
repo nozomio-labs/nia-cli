@@ -7,6 +7,7 @@
  */
 
 import { CrustError } from "@crustjs/core";
+import { CancelledError } from "@crustjs/prompts";
 import { ApiError, NiaSDKError, NiaTimeoutError } from "nia-ai-ts";
 
 /**
@@ -37,6 +38,16 @@ export function handleError(
 
 	if (error instanceof CrustError) {
 		throw error;
+	}
+
+	// User cancelled a prompt (Ctrl+C / Esc). Not an error condition: we want
+	// a silent exit with POSIX SIGINT convention (130 = 128 + SIGINT). No
+	// message — the user just pressed Ctrl+C, they know what they did; any
+	// additional output is noise. Any command that was mid-flight is expected
+	// to have left no side effects on the filesystem or remote services up
+	// to the point of the prompt.
+	if (error instanceof CancelledError) {
+		process.exit(130);
 	}
 
 	if (error instanceof ApiError) {

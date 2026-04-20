@@ -30,7 +30,7 @@
 
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import { confirm, filter } from "@crustjs/prompts";
+import { CancelledError, confirm, filter } from "@crustjs/prompts";
 import { annotate, detectInstalledAgents, skillStatus } from "@crustjs/skills";
 import { app } from "../app.ts";
 import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
@@ -164,7 +164,6 @@ const initCommand = annotate(
 					sources: result.manifest.sources,
 					vaults: result.manifest.vaults,
 					local: result.manifest.local,
-					local_binding_note: result.localBindingNote,
 					next_steps: result.nextSteps,
 				});
 			});
@@ -212,15 +211,38 @@ export interface RunProjectInitResult {
 	manifestPath: string;
 	projectName: string;
 	manifest: ProjectManifest;
-	localBindingNote: string | null;
 	nextSteps: string[];
 	skillInstalled: boolean;
 }
 
 /**
- * Pure-ish core of `nia project init`. Given injected picker / local-source
- * registration / skill-detection callbacks, writes nia.json and returns a
- * structured result. Never mutates any file outside `nia.json` in `cwd`.
+ * Pure-ish core of `nia project init`. Atomic by construction: all prompts
+ * run first (gather phase), then all side effects run second (commit phase).
+ *
+ * Gather phase (no side effects, fully cancellable):
+ *   1. Pre-check: refuse if nia.json exists without --force.
+ *   2. `pickSources()` — runs the cwd-opt-in confirm + fuzzy filter picker.
+ *      If the user Ctrl+C's, `CancelledError` bubbles; nothing has been
+ *      written and `addLocalSource` has NOT been called.
+ *
+ * Commit phase (no prompts, side effects only):
+ *   3. If the user opted in to cwd registration, call `addLocalSource(cwd)`.
+ *      If that throws OR returns no id, abort without writing nia.json —
+ *      we will not leave the user with a half-populated manifest.
+ *   4. Build the full manifest in memory, then `writeManifest` it (single
+ *      atomic write — the ONLY filesystem mutation).
+ *   5. Best-effort, read-only `checkSkillInstalled()` to decide whether to
+ *      include the "install the nia skill" hint in next_steps.
+ *
+ * Guarantees:
+ *   - If any step in the gather phase throws (including user cancel), the
+ *     filesystem and daemon state are unchanged.
+ *   - If the gather phase completes but step 3 (addLocalSource) fails, the
+ *     filesystem is unchanged. The daemon MAY have partially created a
+ *     local source record; the error message tells the user to clean that
+ *     up with `nia local remove` if needed.
+ *   - Once `writeManifest` returns, nia.json reflects exactly what the
+ *     user selected — no "skipped, retry later" notes.
  */
 export async function runProjectInit(
 	opts: RunProjectInitOptions,
@@ -234,39 +256,43 @@ export async function runProjectInit(
 	}
 
 	const projectName = opts.name?.trim() || path.basename(cwd);
-	let manifest = createEmptyManifest(projectName);
 
-	// Step 1: picker (DI'd — real flow prompts, test flow injects).
+	// ---------------------------------------------------------------------
+	// Gather phase — all prompts, zero side effects.
+	// ---------------------------------------------------------------------
+
 	const picked = opts.yes
 		? { sourceIds: [], registerCwd: false }
 		: await opts.pickSources();
 
+	// ---------------------------------------------------------------------
+	// Commit phase — no prompts from here on.
+	// ---------------------------------------------------------------------
+
+	let manifest = createEmptyManifest(projectName);
 	for (const id of picked.sourceIds) {
 		manifest = addSource(manifest, id);
 	}
 
-	// Step 2: opt-in local-folder registration — ONLY when user asked for it.
-	let localBindingNote: string | null = null;
 	if (picked.registerCwd) {
-		try {
-			const local = await opts.addLocalSource(cwd);
-			const localId = local?.local_folder_id;
-			if (localId) {
-				manifest = addLocalBinding(manifest, { path: ".", id: localId });
-				localBindingNote = `Registered ${cwd} as local folder source ${localId}.`;
-			} else {
-				localBindingNote = `Skipped local-folder registration: daemon returned no id. Re-run \`nia local add .\` later.`;
-			}
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			localBindingNote = `Skipped local-folder registration: ${message}. Re-run \`nia local add .\` later.`;
+		// NB: no try/catch. If the daemon call fails we must leave nia.json
+		// unwritten so the user's project state stays consistent — either
+		// they have a manifest that matches their chosen bindings, or they
+		// have nothing. No partial success.
+		const local = await opts.addLocalSource(cwd);
+		const localId = local?.local_folder_id;
+		if (!localId) {
+			throw new Error(
+				`Local-folder registration for ${cwd} returned no id from the daemon. nia.json was not written. Check that the local daemon is running and retry \`nia project init\`.`,
+			);
 		}
+		manifest = addLocalBinding(manifest, { path: ".", id: localId });
 	}
 
-	// Step 3: write nia.json. This is the ONLY file we write.
+	// Single atomic write. Everything above this point has either succeeded
+	// or thrown. Past this point only read-only best-effort work remains.
 	writeManifest(manifestPath, manifest);
 
-	// Step 4: best-effort skill install detection.
 	let skillInstalled = false;
 	try {
 		skillInstalled = await opts.checkSkillInstalled();
@@ -290,7 +316,6 @@ export async function runProjectInit(
 		manifestPath,
 		projectName,
 		manifest,
-		localBindingNote,
 		nextSteps,
 		skillInstalled,
 	};
@@ -396,7 +421,7 @@ async function pickSources(
 				default: true,
 			});
 			if (!proceed) {
-				throw new Error("Aborted by user.");
+				throw new CancelledError("User declined to continue.");
 			}
 		}
 		return { sourceIds: [], registerCwd };

@@ -16,6 +16,7 @@ const originalArgv = process.argv;
 
 // Import the actual error classes
 import { CrustError } from "@crustjs/core";
+import { CancelledError } from "@crustjs/prompts";
 import { ApiError, NiaSDKError, NiaTimeoutError } from "nia-ai-ts";
 import { handleError, withErrorHandling } from "../../src/utils/errors.ts";
 
@@ -411,6 +412,45 @@ describe("error handling", () => {
 			expect(consoleErrorOutput.some((s) => s.includes("inner failure"))).toBe(
 				true,
 			);
+		});
+	});
+
+	// --- CancelledError handling ---
+	//
+	// CancelledError is thrown by `@crustjs/prompts` when the user hits
+	// Ctrl+C during any interactive prompt. It is NOT an error condition:
+	// we want `handleError` to exit silently with code 130 (POSIX SIGINT
+	// convention) — no message, no stack trace, no "Error:" prefix.
+	// The user pressed Ctrl+C, they know what they did.
+
+	describe("CancelledError handling", () => {
+		test("exits silently with code 130 (no output at all)", () => {
+			try {
+				handleError(new CancelledError("user pressed ctrl+c"));
+			} catch (e) {
+				expect((e as Error).message).toBe("process.exit(130)");
+			}
+			expect(consoleErrorOutput).toEqual([]);
+		});
+
+		test("emits nothing even with --verbose", () => {
+			process.argv = ["bun", "nia", "project", "init", "--verbose"];
+			try {
+				handleError(new CancelledError("any"), { verbose: true });
+			} catch {}
+
+			expect(consoleErrorOutput).toEqual([]);
+		});
+
+		test("is handled by withErrorHandling too (exits silently with 130)", async () => {
+			try {
+				await withErrorHandling({ domain: "Project init" }, async () => {
+					throw new CancelledError("user cancelled picker");
+				});
+			} catch (e) {
+				expect((e as Error).message).toBe("process.exit(130)");
+			}
+			expect(consoleErrorOutput).toEqual([]);
 		});
 	});
 

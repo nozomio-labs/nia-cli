@@ -13,9 +13,16 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { CancelledError } from "@crustjs/prompts";
 import {
 	fetchAllSourcesForPicker,
 	runProjectInit,
@@ -310,5 +317,78 @@ describe("runProjectInit", () => {
 				checkSkillInstalled: async () => true,
 			}),
 		).rejects.toThrow(/already exists/);
+	});
+
+	// ---------------------------------------------------------------------
+	// Atomicity regressions.
+	//
+	// `nia project init` is an all-or-nothing operation. If the user cancels
+	// a prompt mid-flow, or if the daemon call for cwd registration fails,
+	// the filesystem MUST be left unchanged — no partial nia.json, no
+	// orphaned manifest referencing a local id that doesn't exist, nothing.
+	// ---------------------------------------------------------------------
+
+	test("cancel during picker leaves no nia.json and does not call addLocalSource", async () => {
+		let addLocalCalls = 0;
+		await expect(
+			runProjectInit({
+				cwd: tmpDir,
+				force: false,
+				yes: false,
+				pickSources: async () => {
+					throw new CancelledError("user pressed ctrl+c");
+				},
+				addLocalSource: async () => {
+					addLocalCalls++;
+					return { local_folder_id: "should-never-happen" };
+				},
+				checkSkillInstalled: async () => true,
+			}),
+		).rejects.toBeInstanceOf(CancelledError);
+
+		expect(addLocalCalls).toBe(0);
+		expect(existsSync(path.join(tmpDir, "nia.json"))).toBe(false);
+	});
+
+	test("daemon failure during registerCwd leaves no nia.json", async () => {
+		await expect(
+			runProjectInit({
+				cwd: tmpDir,
+				force: false,
+				yes: false,
+				pickSources: async () => ({
+					sourceIds: ["repo-x"],
+					registerCwd: true,
+				}),
+				addLocalSource: async () => {
+					throw new Error("daemon unreachable");
+				},
+				checkSkillInstalled: async () => true,
+			}),
+		).rejects.toThrow(/daemon unreachable/);
+
+		expect(existsSync(path.join(tmpDir, "nia.json"))).toBe(false);
+	});
+
+	test("daemon returning no local_folder_id fails cleanly and leaves no nia.json", async () => {
+		await expect(
+			runProjectInit({
+				cwd: tmpDir,
+				force: false,
+				yes: false,
+				pickSources: async () => ({
+					sourceIds: ["repo-x"],
+					registerCwd: true,
+				}),
+				addLocalSource: async () => {
+					// Simulate the contract-violation case: daemon says OK but gives
+					// us nothing to bind.
+					return {} as { local_folder_id: string };
+				},
+				checkSkillInstalled: async () => true,
+			}),
+		).rejects.toThrow(/no id/i);
+
+		expect(existsSync(path.join(tmpDir, "nia.json"))).toBe(false);
 	});
 });
