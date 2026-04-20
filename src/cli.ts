@@ -108,10 +108,9 @@ const main = app
 - **To see what's bound, run \`nia project status\`** (NOT \`nia sources list\`). It prints per-source health (indexed / pending / orphaned / not_found).
 - **Only fall back to discovery if the user explicitly asks about something outside the bound set.** Then use \`nia sources summary\` first (compact), and \`nia sources list --all\` / \`nia repos list --all\` if you genuinely need to enumerate every source.
 
-**If no \`nia.json\` exists** and the user is starting work in a new project, suggest \`nia project init\`. It's a one-shot command that:
-1. Picks indexed sources interactively (or pass \`--yes\` for empty manifest).
-2. Runs \`nia local add .\` so the project's own files are searchable too.
-3. Appends a \`## Nia (project-scoped)\` block to CLAUDE.md / AGENTS.md.
+**If no \`nia.json\` exists** and the user is starting work in a new project, suggest \`nia project init\`. It runs a two-step interactive flow: (1) asks \`Index the current project folder (<cwd>) as a local source?\` — defaults to **No**, opt-in only. (2) Presents a fuzzy picker over the user's indexed sources (repos, docs, papers, datasets, previously-registered local folders). Whatever the user selects in step 2 gets bound into \`nia.json\`; if they answered yes in step 1, the cwd is also registered with the local daemon (\`nia local add .\` equivalent) and added under \`local\`. Pass \`--yes\` to skip both prompts and write an empty manifest.
+
+**\`nia project init\` does NOT mutate any file in the project root other than \`nia.json\`.** No CLAUDE.md, no AGENTS.md, no GEMINI.md. This skill is the canonical channel for \`nia.json\` guidance — any agent that has it installed already knows about Step 0. If you want to make sure the skill is installed for the user's agent, run \`nia skill\`.
 
 After that, every \`nia search query\` from this directory tree auto-scopes — no \`--repos\` flags ever again.
 

@@ -9,29 +9,32 @@
  *
  * Subcommands:
  *
- *   nia project init   — interactive picker over your sources/repos/vaults,
- *                        writes nia.json, runs `nia local add .` (so the
- *                        project's own files are searchable too), and
- *                        appends a Nia block to CLAUDE.md / AGENTS.md.
+ *   nia project init   — first asks whether to register the current project
+ *                        folder as a local source (opt-in, defaults to No),
+ *                        then presents an interactive fuzzy picker over your
+ *                        indexed sources. Writes nia.json. Does NOT mutate
+ *                        CLAUDE.md/AGENTS.md and does NOT auto-register the
+ *                        cwd as a local source. Agent guidance about nia.json
+ *                        lives in the global `nia` skill (`nia skill`) instead
+ *                        of per-project files.
  *   nia project link   — append a source to nia.json by id / name / URL.
  *   nia project unlink — remove a source from nia.json.
  *   nia project status — show bound sources with per-source health.
  *   nia project sync   — re-resolve identifiers to fresh ids, warn on
  *                        missing, rewrite nia.json.
  *
- * The shape of this file mirrors `commands/categories.ts` for command
- * structure and `commands/vault.ts` (init flow) for the auto-wire-into-
- * CLAUDE.md pattern. Backend-side, it reuses `cliSdk.sources` and the
- * existing local-folder daemon endpoints in `services/local/api.ts` —
- * no new backend routes are required.
+ * Backend-side, it reuses `cliSdk.sources` and the existing local-folder
+ * daemon endpoints in `services/local/api.ts` — no new backend routes are
+ * required.
  */
 
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { confirm, filter } from "@crustjs/prompts";
-import { annotate } from "@crustjs/skills";
+import { annotate, detectInstalledAgents, skillStatus } from "@crustjs/skills";
 import { app } from "../app.ts";
 import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
+import { APP_NAME } from "../services/config.ts";
 import { addLocalSource, listLocalSources } from "../services/local/api.ts";
 import { paginateAll } from "../services/pagination.ts";
 import {
@@ -41,6 +44,7 @@ import {
 	createEmptyManifest,
 	findProjectManifest,
 	MANIFEST_FILENAME,
+	type ProjectManifest,
 	readManifest,
 	removeLocalBinding,
 	removeSource,
@@ -54,60 +58,6 @@ import { createOutput } from "../utils/output.ts";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const PROJECT_INSTRUCTIONS_CANDIDATES = [
-	"CLAUDE.md",
-	"AGENTS.md",
-	"GEMINI.md",
-	"CURSOR.md",
-] as const;
-
-function detectProjectInstructionsFile(
-	cwd: string = process.cwd(),
-): string | null {
-	for (const candidate of PROJECT_INSTRUCTIONS_CANDIDATES) {
-		const full = path.join(cwd, candidate);
-		try {
-			if (existsSync(full)) {
-				return candidate;
-			}
-		} catch {
-			// ignore
-		}
-	}
-	return null;
-}
-
-/**
- * Markdown block appended to CLAUDE.md/AGENTS.md by `project init`. Mirrors
- * the shape of `generateVaultAgentsMd` in `commands/vault.ts` so agents
- * encounter a consistent style across both surfaces.
- */
-function generateProjectAgentsMd(projectName?: string): string {
-	const safe = projectName?.trim() || "this project";
-	return `## Nia (project-scoped)
-
-This project has \`nia.json\` — Nia commands auto-scope to its bound sources for **${safe}**. You don't need to discover sources via \`nia sources list\`; the binding is already there.
-
-\`\`\`bash
-# Search auto-scopes to the manifest's sources, vaults, and local folders.
-# No --repos / --docs / --local-folders needed.
-nia search query "..."
-
-# Inspect what's bound and per-source health
-nia project status
-
-# Add or remove sources as the project evolves
-nia project link <id|owner/repo|url>
-nia project unlink <id|owner/repo|url>
-
-# Re-resolve stale identifiers after a source is re-indexed
-nia project sync
-\`\`\`
-
-If the user asks about a topic clearly outside the bound set, fall back to \`nia sources summary\` or \`nia sources list --all\` for full discovery — but only then.
-`;
-}
 
 interface ResolveProjectIdentifierResult {
 	identifier: string;
@@ -163,30 +113,13 @@ const initCommand = annotate(
 		.sub("init")
 		.meta({
 			description:
-				"Initialize a project-scoped nia.json: pick sources interactively, add the cwd as a local folder, wire CLAUDE.md/AGENTS.md.",
+				"Initialize a project-scoped nia.json. First asks whether to register the cwd as a local source (opt-in), then presents a fuzzy picker over your indexed sources. Does not mutate CLAUDE.md/AGENTS.md.",
 		})
 		.flags({
 			name: {
 				type: "string",
 				description:
 					"Project name to record in nia.json (defaults to cwd basename).",
-			},
-			local: {
-				type: "boolean",
-				default: true,
-				description:
-					"Add the cwd as a local folder source (`nia local add .`) and bind it (default: true). Pass `--no-local` to skip.",
-			},
-			wire: {
-				type: "boolean",
-				default: true,
-				description:
-					"Append a Nia block to CLAUDE.md / AGENTS.md (auto-detected). Pass --no-wire to skip.",
-			},
-			"wire-into": {
-				type: "string",
-				description:
-					"Path to the project instructions file to append the Nia block to. Defaults to whichever of CLAUDE.md/AGENTS.md/GEMINI.md/CURSOR.md exists in cwd; creates CLAUDE.md if none exists.",
 			},
 			yes: {
 				type: "boolean",
@@ -207,94 +140,190 @@ const initCommand = annotate(
 
 			await withErrorHandling({ domain: "Project init" }, async () => {
 				const cwd = process.cwd();
-				const manifestPath = path.join(cwd, MANIFEST_FILENAME);
-				if (existsSync(manifestPath) && !flags.force) {
-					throw new Error(
-						`${MANIFEST_FILENAME} already exists in ${cwd}. Re-run with --force to overwrite, or edit it directly with \`nia project link\` / \`nia project unlink\`.`,
-					);
-				}
+				const apiKey = flags["api-key"];
 
-				const projectName =
-					(flags.name as string | undefined)?.trim() || path.basename(cwd);
-				let manifest = createEmptyManifest(projectName);
-
-				// Step 1: optional interactive source picker
-				if (!flags.yes && process.stdin.isTTY) {
-					const cliSdk = await createCliSdk({ apiKey: flags["api-key"] });
-					const pickedSources = await pickSources(cliSdk);
-					for (const id of pickedSources) {
-						manifest = addSource(manifest, id);
-					}
-				}
-
-				// Step 2: add cwd as local folder (default on)
-				let localBindingNote: string | null = null;
-				if (flags.local !== false) {
-					try {
-						const local = await addLocalSource(cwd, flags["api-key"]);
-						manifest = addLocalBinding(manifest, {
-							path: ".",
-							id: local.local_folder_id,
-						});
-						localBindingNote = `Registered ${cwd} as local folder source ${local.local_folder_id}.`;
-					} catch (err) {
-						const message = err instanceof Error ? err.message : String(err);
-						localBindingNote = `Skipped local-folder registration: ${message}. Re-run \`nia local add .\` later.`;
-					}
-				}
-
-				// Step 3: write nia.json
-				writeManifest(manifestPath, manifest);
-
-				// Step 4: optional wire into instructions file
-				let wiredFile: string | null = null;
-				let wireSkipReason: string | null = null;
-				if (flags.wire !== false) {
-					const explicit = flags["wire-into"] as string | undefined;
-					const target =
-						explicit ?? detectProjectInstructionsFile(cwd) ?? "CLAUDE.md";
-					try {
-						const block = generateProjectAgentsMd(projectName);
-						const fullTarget = path.isAbsolute(target)
-							? target
-							: path.join(cwd, target);
-						const existing = existsSync(fullTarget)
-							? readFileSync(fullTarget, "utf8")
-							: "";
-						const separator =
-							existing && !existing.endsWith("\n\n") ? "\n\n" : "";
-						writeFileSync(fullTarget, existing + separator + block, "utf8");
-						wiredFile = target;
-					} catch (err) {
-						wireSkipReason = err instanceof Error ? err.message : String(err);
-					}
-				} else {
-					wireSkipReason = "skipped via --no-wire";
-				}
+				const result = await runProjectInit({
+					cwd,
+					name: flags.name as string | undefined,
+					force: Boolean(flags.force),
+					yes: Boolean(flags.yes),
+					pickSources: async () => {
+						if (flags.yes || !process.stdin.isTTY) {
+							return { sourceIds: [], registerCwd: false };
+						}
+						const cliSdk = await createCliSdk({ apiKey });
+						return pickSources(cliSdk, cwd);
+					},
+					addLocalSource: (p: string) => addLocalSource(p, apiKey),
+					checkSkillInstalled: () => checkNiaSkillInstalled(),
+				});
 
 				fmt.output({
-					manifest: manifestPath,
-					name: projectName,
-					sources: manifest.sources,
-					vaults: manifest.vaults,
-					local: manifest.local,
-					local_binding_note: localBindingNote,
-					wired_into: wiredFile,
-					wire_skip_reason: wireSkipReason,
-					next_steps: [
-						'`nia search query "..."` will now auto-scope to this project.',
-						"Add more sources with `nia project link <id|owner/repo|url>`.",
-						"Inspect bindings with `nia project status`.",
-					],
+					manifest: result.manifestPath,
+					name: result.projectName,
+					sources: result.manifest.sources,
+					vaults: result.manifest.vaults,
+					local: result.manifest.local,
+					local_binding_note: result.localBindingNote,
+					next_steps: result.nextSteps,
 				});
 			});
 		}),
 	[
 		"Run inside a project directory to bind indexed sources to a `nia.json`. Future `nia search` invocations from this tree auto-scope.",
-		"By default also runs `nia local add .` so the project's own files are searchable alongside its bound sources. Pass `--no-local` to skip.",
-		"Writes (or appends to) CLAUDE.md / AGENTS.md so any agent working in this directory immediately sees the project bindings.",
+		"Before the source picker, init asks 'Index the current project folder (<cwd>) as a local source?' — defaults to No. Answer yes to have the cwd registered via the local daemon and bound to `nia.json` under `local`.",
+		"Does NOT touch CLAUDE.md / AGENTS.md / GEMINI.md / CURSOR.md. The global `nia` skill teaches agents to detect and use `nia.json` automatically — run `nia skill` if you haven't installed it yet.",
 	],
 );
+
+// ---------------------------------------------------------------------------
+// Testable core: runProjectInit
+//
+// Dependency-injected so tests can exercise the real manifest-writing logic
+// without hitting the daemon, prompting interactively, or shelling out to
+// `detectInstalledAgents`. Keeps the public CLI surface (`nia project init`)
+// as the only place that wires real implementations in.
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of the picker step. `registerCwd` is true iff the user selected the
+ * synthetic "This project folder" choice. `sourceIds` is the canonical set of
+ * source ids the user picked (MAY contain the sentinel too if callers don't
+ * pre-partition — `runProjectInit` strips it defensively).
+ */
+export interface PickSourcesResult {
+	sourceIds: string[];
+	registerCwd: boolean;
+}
+
+export interface RunProjectInitOptions {
+	cwd: string;
+	name?: string;
+	force: boolean;
+	yes: boolean;
+	pickSources: () => Promise<PickSourcesResult>;
+	addLocalSource: (
+		path: string,
+	) => Promise<{ local_folder_id: string } | null | undefined>;
+	checkSkillInstalled: () => Promise<boolean>;
+}
+
+export interface RunProjectInitResult {
+	manifestPath: string;
+	projectName: string;
+	manifest: ProjectManifest;
+	localBindingNote: string | null;
+	nextSteps: string[];
+	skillInstalled: boolean;
+}
+
+/**
+ * Pure-ish core of `nia project init`. Given injected picker / local-source
+ * registration / skill-detection callbacks, writes nia.json and returns a
+ * structured result. Never mutates any file outside `nia.json` in `cwd`.
+ */
+export async function runProjectInit(
+	opts: RunProjectInitOptions,
+): Promise<RunProjectInitResult> {
+	const { cwd } = opts;
+	const manifestPath = path.join(cwd, MANIFEST_FILENAME);
+	if (existsSync(manifestPath) && !opts.force) {
+		throw new Error(
+			`${MANIFEST_FILENAME} already exists in ${cwd}. Re-run with --force to overwrite, or edit it directly with \`nia project link\` / \`nia project unlink\`.`,
+		);
+	}
+
+	const projectName = opts.name?.trim() || path.basename(cwd);
+	let manifest = createEmptyManifest(projectName);
+
+	// Step 1: picker (DI'd — real flow prompts, test flow injects).
+	const picked = opts.yes
+		? { sourceIds: [], registerCwd: false }
+		: await opts.pickSources();
+
+	for (const id of picked.sourceIds) {
+		manifest = addSource(manifest, id);
+	}
+
+	// Step 2: opt-in local-folder registration — ONLY when user asked for it.
+	let localBindingNote: string | null = null;
+	if (picked.registerCwd) {
+		try {
+			const local = await opts.addLocalSource(cwd);
+			const localId = local?.local_folder_id;
+			if (localId) {
+				manifest = addLocalBinding(manifest, { path: ".", id: localId });
+				localBindingNote = `Registered ${cwd} as local folder source ${localId}.`;
+			} else {
+				localBindingNote = `Skipped local-folder registration: daemon returned no id. Re-run \`nia local add .\` later.`;
+			}
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			localBindingNote = `Skipped local-folder registration: ${message}. Re-run \`nia local add .\` later.`;
+		}
+	}
+
+	// Step 3: write nia.json. This is the ONLY file we write.
+	writeManifest(manifestPath, manifest);
+
+	// Step 4: best-effort skill install detection.
+	let skillInstalled = false;
+	try {
+		skillInstalled = await opts.checkSkillInstalled();
+	} catch {
+		// Best effort — if detection fails, surface the nudge anyway.
+		skillInstalled = false;
+	}
+
+	const nextSteps: string[] = [
+		'`nia search query "..."` will now auto-scope to this project.',
+		"Add more sources with `nia project link <id|owner/repo|url>`.",
+		"Inspect bindings with `nia project status`.",
+	];
+	if (!skillInstalled) {
+		nextSteps.push(
+			"Install the `nia skill` so your agents detect `nia.json` automatically: `nia skill`",
+		);
+	}
+
+	return {
+		manifestPath,
+		projectName,
+		manifest,
+		localBindingNote,
+		nextSteps,
+		skillInstalled,
+	};
+}
+
+/**
+ * Best-effort check: is the `nia` skill installed for any detected agent?
+ *
+ * Wrapped with a short timeout so a slow PATH scan or filesystem stall can't
+ * block `nia project init`. Returns `false` on any failure — the caller uses
+ * that to decide whether to print a "run `nia skill`" nudge. Never throws.
+ */
+async function checkNiaSkillInstalled(): Promise<boolean> {
+	const timeoutMs = 1500;
+	const timeout = new Promise<boolean>((resolve) => {
+		setTimeout(() => resolve(false), timeoutMs);
+	});
+	const detect = (async () => {
+		try {
+			const agents = await detectInstalledAgents();
+			if (agents.length === 0) return false;
+			const status = await skillStatus({
+				name: APP_NAME,
+				agents,
+				scope: "global",
+			});
+			return status.agents.some((a) => a.installed);
+		} catch {
+			return false;
+		}
+	})();
+	return Promise.race([detect, timeout]);
+}
 
 /**
  * Fetch every indexed source available to the current account, paginated.
@@ -323,34 +352,54 @@ export async function fetchAllSourcesForPicker(cliSdk: {
 }
 
 /**
- * Build a fuzzy-filter multi-select picker from the user's existing sources.
+ * Two-step interactive source picker for `nia project init`.
  *
- * Uses `filter({ multiple: true })` so users can type to narrow the list
- * (by display name, identifier, or type) and space-toggle matches. This
- * scales better than a plain multiselect once an account has tens of
- * indexed sources.
+ * Step 1 — **cwd opt-in confirm.** Asks the user whether to register the
+ * current project folder as a local source. Defaults to No so `init` stays
+ * read-only unless the user explicitly opts in. If they answer yes, the
+ * caller (`runProjectInit`) calls `addLocalSource(cwd)` and adds a
+ * `local[]` binding to `nia.json`.
  *
- * Implementation: pages through `cliSdk.sources.list` via
- * `fetchAllSourcesForPicker` (capped at 500 items). Users with more sources
- * than that can always `nia project link` more later. Local folders come
- * from `listLocalSources` so the picker matches what `nia sources summary`
- * would show.
+ * Step 2 — **fuzzy filter over indexed sources.** Uses `filter({ multiple:
+ * true })` so users can type to narrow the list (by display name,
+ * identifier, or type) and space-toggle matches. This scales better than a
+ * plain multiselect once an account has tens of indexed sources. Pages
+ * through `cliSdk.sources.list` via `fetchAllSourcesForPicker` (capped at
+ * 500 items).
+ *
+ * Returns a structured `{ sourceIds, registerCwd }` so the caller can route
+ * the cwd opt-in to `addLocalSource(cwd)` + a `local[]` binding rather
+ * than letting it land in `sources[]`.
  */
 async function pickSources(
 	cliSdk: Awaited<ReturnType<typeof createCliSdk>>,
-): Promise<string[]> {
+	cwd: string,
+): Promise<PickSourcesResult> {
+	// Step 1: opt-in confirm for registering cwd as a local source.
+	const registerCwd = await confirm({
+		message: `Index the current project folder (${cwd}) as a local source?`,
+		default: false,
+	});
+
+	// Step 2: fuzzy picker over the user's indexed sources.
 	const items = await fetchAllSourcesForPicker(cliSdk);
 
 	if (items.length === 0) {
-		const proceed = await confirm({
-			message:
-				"No indexed sources found yet. Continue with an empty nia.json? (You can `nia project link` later.)",
-			default: true,
-		});
-		if (!proceed) {
-			throw new Error("Aborted by user.");
+		// Brand-new account with no indexed sources. If the user opted in to
+		// the cwd above, we already have something useful to write — skip the
+		// "continue with empty manifest?" prompt. Otherwise ask before
+		// producing a truly empty nia.json.
+		if (!registerCwd) {
+			const proceed = await confirm({
+				message:
+					"No indexed sources found. Continue with an empty nia.json? (You can `nia project link` later.)",
+				default: true,
+			});
+			if (!proceed) {
+				throw new Error("Aborted by user.");
+			}
 		}
-		return [];
+		return { sourceIds: [], registerCwd };
 	}
 
 	const choices = items
@@ -389,10 +438,6 @@ async function pickSources(
 			} => c !== null,
 		);
 
-	if (choices.length === 0) {
-		return [];
-	}
-
 	const picked = await filter<string>({
 		message:
 			"Pick sources to bind to this project (type to filter, space to toggle, enter to confirm). Skip with no selection.",
@@ -402,7 +447,7 @@ async function pickSources(
 		maxVisible: 15,
 	});
 
-	return [...picked];
+	return { sourceIds: [...picked], registerCwd };
 }
 
 // ---------------------------------------------------------------------------
