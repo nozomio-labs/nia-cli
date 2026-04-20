@@ -28,7 +28,7 @@
 
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { confirm, multiselect } from "@crustjs/prompts";
+import { confirm, filter } from "@crustjs/prompts";
 import { annotate } from "@crustjs/skills";
 import { app } from "../app.ts";
 import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
@@ -323,7 +323,12 @@ export async function fetchAllSourcesForPicker(cliSdk: {
 }
 
 /**
- * Build a multi-select picker from the user's existing sources.
+ * Build a fuzzy-filter multi-select picker from the user's existing sources.
+ *
+ * Uses `filter({ multiple: true })` so users can type to narrow the list
+ * (by display name, identifier, or type) and space-toggle matches. This
+ * scales better than a plain multiselect once an account has tens of
+ * indexed sources.
  *
  * Implementation: pages through `cliSdk.sources.list` via
  * `fetchAllSourcesForPicker` (capped at 500 items). Users with more sources
@@ -388,10 +393,12 @@ async function pickSources(
 		return [];
 	}
 
-	const picked = await multiselect<string>({
+	const picked = await filter<string>({
 		message:
-			"Pick sources to bind to this project (space to toggle, enter to confirm). Skip with no selection.",
+			"Pick sources to bind to this project (type to filter, space to toggle, enter to confirm). Skip with no selection.",
+		multiple: true,
 		choices,
+		placeholder: "Type to filter sources...",
 		maxVisible: 15,
 	});
 
