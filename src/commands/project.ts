@@ -30,7 +30,7 @@
 
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import { CancelledError, confirm, filter } from "@crustjs/prompts";
+import { CancelledError, confirm, multifilter } from "@crustjs/prompts";
 import { annotate, detectInstalledAgents, skillStatus } from "@crustjs/skills";
 import { app } from "../app.ts";
 import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
@@ -463,10 +463,9 @@ async function pickSources(
 			} => c !== null,
 		);
 
-	const picked = await filter<string>({
+	const picked = await multifilter<string>({
 		message:
 			"Pick sources to bind to this project (type to filter, space to toggle, enter to confirm). Skip with no selection.",
-		multiple: true,
 		choices,
 		placeholder: "Type to filter sources...",
 		maxVisible: 15,
