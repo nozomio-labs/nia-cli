@@ -537,7 +537,8 @@ const deleteSessionCommand = app
 const oracleUsageCommand = app
 	.sub("1m-usage")
 	.meta({
-		description: "Show Oracle usage summary including 1M context operations",
+		description:
+			"Show account Balance (remaining/limit per operation), including Oracle / 1M context",
 	})
 	.run(async ({ flags }) => {
 		await withErrorHandling({ domain: "Oracle" }, async () => {

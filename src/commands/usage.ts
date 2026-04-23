@@ -20,6 +20,6 @@ export const usageCommand = annotate(
 		}),
 	[
 		"Check API usage, plan limits, and billing period.",
-		"Shows breakdown of all operation types with used/limit counts.",
+		"Shows Balance per operation type as remaining/limit (aligned with the dashboard).",
 	],
 );
