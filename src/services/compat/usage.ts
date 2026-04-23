@@ -46,17 +46,16 @@ export function formatCliUsageLines(normalized: CliUsage): string[] {
 		return lines;
 	}
 
-	lines.push("\nUsage breakdown:");
+	lines.push("\nBalance:");
 	for (const [key, entry] of entries) {
 		if (entry.unlimited) {
-			lines.push(`  ${key}: ${entry.used} (unlimited)`);
+			lines.push(`  ${key}: ∞`);
 			continue;
 		}
 
-		if (typeof entry.limit === "number") {
-			const pct =
-				entry.limit > 0 ? Math.round((entry.used / entry.limit) * 100) : 0;
-			lines.push(`  ${key}: ${entry.used}/${entry.limit} (${pct}%)`);
+		const remaining = effectiveRemaining(entry);
+		if (remaining !== undefined && typeof entry.limit === "number") {
+			lines.push(`  ${key}: ${remaining}/${entry.limit}`);
 			continue;
 		}
 
@@ -64,6 +63,16 @@ export function formatCliUsageLines(normalized: CliUsage): string[] {
 	}
 
 	return lines;
+}
+
+function effectiveRemaining(entry: UsageBucket): number | undefined {
+	if (entry.unlimited || typeof entry.limit !== "number") {
+		return undefined;
+	}
+	if (typeof entry.remaining === "number") {
+		return entry.remaining;
+	}
+	return Math.max(0, entry.limit - entry.used);
 }
 
 export function printCliUsage(normalized: CliUsage): void {

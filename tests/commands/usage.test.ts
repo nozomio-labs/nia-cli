@@ -45,7 +45,10 @@ mock.module("nia-ai-ts", () => ({
 // --- Import after mocking ---
 
 import { V2ApiService } from "nia-ai-ts";
-import { normalizeUsageSummary } from "../../src/services/compat/usage.ts";
+import {
+	formatCliUsageLines,
+	normalizeUsageSummary,
+} from "../../src/services/compat/usage.ts";
 import { createSdk } from "../../src/services/sdk.ts";
 
 describe("usage command", () => {
@@ -119,36 +122,37 @@ describe("usage command", () => {
 			});
 		});
 
-		test("usage percentage calculation is correct", () => {
-			const testCases = [
-				{ used: 42, limit: 100, expected: 42 },
-				{ used: 0, limit: 100, expected: 0 },
-				{ used: 100, limit: 100, expected: 100 },
-				{ used: 1, limit: 3, expected: 33 },
-				{ used: 0, limit: 0, expected: 0 },
-			];
+		test("formatCliUsageLines shows Balance and remaining/limit", async () => {
+			await createSdk();
 
-			for (const { used, limit, expected } of testCases) {
-				const pct = limit > 0 ? Math.round((used / limit) * 100) : 0;
-				expect(pct).toBe(expected);
-			}
+			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
+			const lines = formatCliUsageLines(normalizeUsageSummary(result));
+
+			expect(lines).toContain("\nBalance:");
+			expect(lines).toContain("  queries: 58/100");
+			expect(lines).toContain("  indexing: 7/10");
+			expect(lines).toContain("  oracle: 15/20");
+			expect(lines).toContain("  tracer: ∞");
 		});
 
-		test("handles unlimited usage entries", () => {
-			const entry = { used: 10, limit: 0, unlimited: true };
+		test("computes remaining from used and limit when remaining omitted", async () => {
+			// biome-ignore lint/suspicious/noExplicitAny: test mock with partial response
+			(mockGetUsage as any).mockImplementationOnce(() =>
+				Promise.resolve({
+					user_id: "user_123",
+					tier: "Free",
+					period: { start: "2026-01-01", end: "2026-02-01" },
+					buckets: {
+						queries: { used: 2, limit: 10, unlimited: false },
+					},
+				}),
+			);
 
-			expect(entry.unlimited).toBe(true);
-			const display = `${entry.used} (unlimited)`;
-			expect(display).toBe("10 (unlimited)");
-		});
+			await createSdk();
+			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
+			const lines = formatCliUsageLines(normalizeUsageSummary(result));
 
-		test("handles limited usage entries formatting", () => {
-			const entry = { used: 42, limit: 100, unlimited: false };
-
-			const pct =
-				entry.limit > 0 ? Math.round((entry.used / entry.limit) * 100) : 0;
-			const display = `${entry.used}/${entry.limit} (${pct}%)`;
-			expect(display).toBe("42/100 (42%)");
+			expect(lines).toContain("  queries: 8/10");
 		});
 
 		test("handles empty usage breakdown", async () => {
