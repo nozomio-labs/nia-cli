@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.5.2
+
+### Patch Changes
+
+- 481ca70: Show usage as **Balance** with **remaining/limit** per bucket (and **∞** for unlimited), aligned with the dashboard. `nia usage` skill copy and `oracle 1m-usage` description updated accordingly.
+
 ## 0.5.1
 
 ### Patch Changes
