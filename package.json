@@ -41,21 +41,21 @@
 		"publish": "crust build --package && crust publish && changeset tag"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.4.12",
+		"@biomejs/biome": "2.4.13",
 		"@changesets/cli": "^2.30.0",
 		"@crustjs/core": "0.0.16",
 		"@crustjs/crust": "0.0.23",
-		"@crustjs/plugins": "0.0.21",
-		"@crustjs/prompts": "^0.0.12",
-		"@crustjs/skills": "^0.0.23",
+		"@crustjs/plugins": "0.0.22",
+		"@crustjs/prompts": "^0.0.13",
+		"@crustjs/skills": "^0.0.24",
 		"@crustjs/store": "^0.0.4",
-		"@crustjs/style": "^0.0.6",
+		"@crustjs/style": "^0.1.0",
 		"@types/bun": "^1.3.11",
 		"nia-ai-ts": "^0.1.0",
 		"typescript": "^6.0.3"
 	},
 	"dependencies": {
-		"@nozomioai/nia-sdk": "^0.0.4",
+		"@nozomioai/nia-sdk": "^0.0.6",
 		"chokidar": "^5.0.0",
 		"just-bash": "^2.10.0",
 		"open": "^11.0.0"
