@@ -1,5 +1,11 @@
 # nia-cli
 
+## 0.5.3
+
+### Patch Changes
+
+- 3ebf0b0: Show purchased API credits separately in `nia usage`.
+
 ## 0.5.2
 
 ### Patch Changes
