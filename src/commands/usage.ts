@@ -19,7 +19,7 @@ export const usageCommand = annotate(
 			});
 		}),
 	[
-		"Check API usage, plan limits, and billing period.",
-		"Shows Balance per operation type as remaining/limit (aligned with the dashboard).",
+		"Check API usage, plan limits, purchased credits, and billing period.",
+		"Shows Balance per operation type as remaining/limit plus Credits outside subscription usage.",
 	],
 );

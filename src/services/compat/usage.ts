@@ -1,6 +1,7 @@
 export type CliUsage = {
 	plan?: string;
 	period?: string;
+	credits?: number | Record<string, number>;
 	usage: Record<
 		string,
 		{
@@ -21,6 +22,7 @@ export function normalizeUsageSummary(input: unknown): CliUsage {
 	return {
 		plan: getString(source.tier) ?? getString(source.subscription_tier),
 		period: formatPeriod(source),
+		credits: normalizeCredits(source),
 		usage: normalizeUsageBuckets(source),
 	};
 }
@@ -38,28 +40,41 @@ export function formatCliUsageLines(normalized: CliUsage): string[] {
 
 	const entries = Object.entries(normalized.usage);
 	if (entries.length === 0) {
-		lines.push(
-			lines.length > 0
-				? "\nNo usage data available."
-				: "No usage data available.",
-		);
-		return lines;
+		if (normalized.credits === undefined) {
+			lines.push(
+				lines.length > 0
+					? "\nNo usage data available."
+					: "No usage data available.",
+			);
+			return lines;
+		}
+	} else {
+		lines.push("\nBalance:");
+		for (const [key, entry] of entries) {
+			if (entry.unlimited) {
+				lines.push(`  ${key}: ∞`);
+				continue;
+			}
+
+			const remaining = effectiveRemaining(entry);
+			if (remaining !== undefined && typeof entry.limit === "number") {
+				lines.push(`  ${key}: ${remaining}/${entry.limit}`);
+				continue;
+			}
+
+			lines.push(`  ${key}: ${entry.used}`);
+		}
 	}
 
-	lines.push("\nBalance:");
-	for (const [key, entry] of entries) {
-		if (entry.unlimited) {
-			lines.push(`  ${key}: ∞`);
-			continue;
+	if (normalized.credits !== undefined) {
+		lines.push("\nCredits:");
+		if (typeof normalized.credits === "number") {
+			lines.push(`  api_requests: ${normalized.credits}`);
+		} else {
+			for (const [key, value] of Object.entries(normalized.credits)) {
+				lines.push(`  ${key}: ${value}`);
+			}
 		}
-
-		const remaining = effectiveRemaining(entry);
-		if (remaining !== undefined && typeof entry.limit === "number") {
-			lines.push(`  ${key}: ${remaining}/${entry.limit}`);
-			continue;
-		}
-
-		lines.push(`  ${key}: ${entry.used}`);
 	}
 
 	return lines;
@@ -133,6 +148,33 @@ function normalizeUsageBuckets(
 	}
 
 	return {};
+}
+
+function normalizeCredits(
+	source: Record<string, unknown>,
+): CliUsage["credits"] {
+	const creditValue =
+		source.credits ??
+		source.api_credits ??
+		source.api_request_credits ??
+		source.api_request_credit_balance ??
+		source.credit_balance;
+
+	if (typeof creditValue === "number") {
+		return creditValue;
+	}
+
+	if (!isRecord(creditValue)) {
+		return undefined;
+	}
+
+	const credits = Object.fromEntries(
+		Object.entries(creditValue).filter(
+			(entry): entry is [string, number] => typeof entry[1] === "number",
+		),
+	);
+
+	return Object.keys(credits).length > 0 ? credits : undefined;
 }
 
 function normalizeBucket(input: unknown): UsageBucket {

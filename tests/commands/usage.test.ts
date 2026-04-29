@@ -135,6 +135,49 @@ describe("usage command", () => {
 			expect(lines).toContain("  tracer: ∞");
 		});
 
+		test("normalizes purchased credits outside subscription usage", async () => {
+			// biome-ignore lint/suspicious/noExplicitAny: test mock with partial response
+			(mockGetUsage as any).mockImplementationOnce(() =>
+				Promise.resolve({
+					user_id: "user_123",
+					tier: "Pro",
+					period: { start: "2026-01-01", end: "2026-02-01" },
+					buckets: {
+						queries: { used: 42, limit: 100, remaining: 58 },
+					},
+					credits: 40,
+				}),
+			);
+
+			await createSdk();
+			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
+			const usage = normalizeUsageSummary(result);
+
+			expect(usage.credits).toBe(40);
+		});
+
+		test("formatCliUsageLines shows purchased credits separately", async () => {
+			// biome-ignore lint/suspicious/noExplicitAny: test mock with partial response
+			(mockGetUsage as any).mockImplementationOnce(() =>
+				Promise.resolve({
+					user_id: "user_123",
+					tier: "Pro",
+					period: { start: "2026-01-01", end: "2026-02-01" },
+					buckets: {
+						queries: { used: 42, limit: 100, remaining: 58 },
+					},
+					credits: 40,
+				}),
+			);
+
+			await createSdk();
+			const result = await V2ApiService.getUsageSummaryV2V2UsageGet();
+			const lines = formatCliUsageLines(normalizeUsageSummary(result));
+
+			expect(lines).toContain("\nCredits:");
+			expect(lines).toContain("  api_requests: 40");
+		});
+
 		test("computes remaining from used and limit when remaining omitted", async () => {
 			// biome-ignore lint/suspicious/noExplicitAny: test mock with partial response
 			(mockGetUsage as any).mockImplementationOnce(() =>
