@@ -538,30 +538,36 @@ export async function createCliSdk(
 			async content(id, query) {
 				return withExperimentalFallback(
 					async () =>
-						unwrapExperimentalResponse(
-							await client.sources({ id }).content.get({
-								query: {
-									path: query?.path,
-									url: query?.url,
-									branch: query?.branch,
-									page: query?.page,
-									treeNodeId: query?.treeNodeId,
-									lineStart: query?.lineStart,
-									lineEnd: query?.lineEnd,
-									maxLength: query?.maxLength,
-								},
-							}),
+						normalizeSourceContentResponse(
+							unwrapExperimentalResponse(
+								await client.sources({ id }).content.get({
+									query: {
+										path: query?.path,
+										url: query?.url,
+										branch: query?.branch,
+										page: query?.page,
+										treeNodeId: query?.treeNodeId,
+										lineStart: query?.lineStart,
+										lineEnd: query?.lineEnd,
+										maxLength: query?.maxLength,
+									},
+								}),
+							),
 						),
-					() => legacyContent(id, query),
+					async () =>
+						normalizeSourceContentResponse(await legacyContent(id, query)),
 				);
 			},
 			async grep(id, payload) {
 				return withExperimentalFallback(
 					async () =>
-						unwrapExperimentalResponse(
-							await client.sources({ id }).grep.post(payload),
+						normalizeSourceGrepResponse(
+							unwrapExperimentalResponse(
+								await client.sources({ id }).grep.post(payload),
+							),
 						),
-					() => legacyGrep(id, payload),
+					async () =>
+						normalizeSourceGrepResponse(await legacyGrep(id, payload)),
 				);
 			},
 			explore(params) {
@@ -572,15 +578,330 @@ export async function createCliSdk(
 			async query(payload) {
 				return withExperimentalFallback(
 					async () =>
-						unwrapExperimentalResponse(
-							await client.search.post(payload as CliSearchQueryPayload),
+						normalizeSearchQueryResponse(
+							unwrapExperimentalResponse(
+								await client.search.post(payload as CliSearchQueryPayload),
+							),
+							payload,
 						),
-					() => legacyQuerySearch(toLegacySearchQueryPayload(payload)),
+					() =>
+						normalizeSearchQueryResponse(
+							legacyQuerySearch(toLegacySearchQueryPayload(payload)),
+							payload,
+						),
 				);
 			},
 		},
 		sandbox: sandboxHandlers(getSandboxEdenClient),
 	};
+}
+
+/**
+ * Experimental source/search responses can include base64-wrapped local-folder
+ * payloads (encrypted at rest upstream). Decode them into plain UTF-8 text so
+ * `nia sources read` and `nia search query` don't surface garbled snippets.
+ */
+function normalizeSourceContentResponse(response: unknown): unknown {
+	if (!isRecord(response)) {
+		return response;
+	}
+
+	const normalized: Record<string, unknown> = { ...response };
+	const metadata = isRecord(normalized.metadata) ? normalized.metadata : undefined;
+	const sourceType =
+		toLowerString(normalized.source_type) ??
+		toLowerString(metadata?.source_type) ??
+		toLowerString(metadata?.sourceType);
+	const content = pickContentField(normalized);
+	if (content === null) {
+		return normalized;
+	}
+	const encodingHint =
+		toLowerString(metadata?.content_encoding) ??
+		toLowerString(metadata?.contentEncoding) ??
+		toLowerString(metadata?.encoding);
+	const encodedFieldPresent =
+		typeof normalized.content_base64 === "string" ||
+		typeof normalized.contentBase64 === "string";
+	if (
+		sourceType !== "local_folder" &&
+		!(encodingHint?.includes("base64")) &&
+		!encodedFieldPresent
+	) {
+		return normalized;
+	}
+
+	normalized.content = decodePossiblyEncodedText(content, metadata);
+	return normalized;
+}
+
+function normalizeSourceGrepResponse(response: unknown): unknown {
+	if (!isRecord(response)) {
+		return response;
+	}
+
+	const normalized: Record<string, unknown> = { ...response };
+	if (!Array.isArray(normalized.matches)) {
+		return normalized;
+	}
+
+	normalized.matches = normalized.matches.map((match) => {
+		if (!isRecord(match)) {
+			return match;
+		}
+
+		const metadata = isRecord(match.metadata) ? match.metadata : undefined;
+		const sourceType =
+			toLowerString(match.source_type) ??
+			toLowerString(match.sourceType) ??
+			toLowerString(metadata?.source_type) ??
+			toLowerString(metadata?.sourceType);
+		if (sourceType !== "local_folder") {
+			return match;
+		}
+
+		const next: Record<string, unknown> = { ...match };
+		if (typeof next.line_content === "string") {
+			next.line_content = decodePossiblyEncodedText(next.line_content, metadata);
+		}
+		if (typeof next.content === "string") {
+			next.content = decodePossiblyEncodedText(next.content, metadata);
+		}
+		return next;
+	});
+
+	return normalized;
+}
+
+async function normalizeSearchQueryResponse(
+	responsePromise: Promise<unknown> | unknown,
+	payload: Record<string, unknown>,
+): Promise<unknown> {
+	const response = await responsePromise;
+	if (!isRecord(response)) {
+		return response;
+	}
+
+	const normalized: Record<string, unknown> = { ...response };
+	const scope = deriveRequestedScope(payload);
+
+	if (Array.isArray(normalized.sources)) {
+		normalized.sources = normalized.sources.flatMap((entry) => {
+			if (!isRecord(entry)) {
+				return [];
+			}
+
+			const metadata = isRecord(entry.metadata) ? entry.metadata : undefined;
+			const sourceType =
+				toLowerString(metadata?.sourceType) ??
+				toLowerString(metadata?.source_type);
+
+			if (scope.localOnly && sourceType !== "local_folder") {
+				return [];
+			}
+
+			const next: Record<string, unknown> = { ...entry };
+			if (sourceType === "local_folder" && typeof next.content === "string") {
+				next.content = decodePossiblyEncodedText(next.content, metadata);
+			}
+			return [next];
+		});
+	}
+
+	if (scope.localOnly) {
+		if (Array.isArray(normalized.readySources)) {
+			normalized.readySources = normalized.readySources.filter(
+				(source) =>
+					isRecord(source) &&
+					toLowerString(source.type) === "local_folder",
+			);
+		}
+		if (Array.isArray(normalized.blockedSources)) {
+			normalized.blockedSources = normalized.blockedSources.filter(
+				(source) =>
+					isRecord(source) &&
+					toLowerString(source.type) === "local_folder",
+			);
+		}
+	}
+
+	return normalized;
+}
+
+function deriveRequestedScope(payload: Record<string, unknown>): { localOnly: boolean } {
+	if (isQuerySearchPayload(payload)) {
+		let hasNonLocal = false;
+		let hasAny = false;
+		for (const source of payload.sources) {
+			if ("type" in source) {
+				hasAny = true;
+				if (source.type !== "local_folder") {
+					hasNonLocal = true;
+				}
+				continue;
+			}
+			if ("id" in source) {
+				hasAny = true;
+			}
+		}
+		return { localOnly: hasAny && !hasNonLocal };
+	}
+
+	const hasRepos =
+		Array.isArray(payload.repositories) && payload.repositories.length > 0;
+	const hasDataSources =
+		Array.isArray(payload.data_sources) && payload.data_sources.length > 0;
+	const hasLocalFolders =
+		Array.isArray(payload.local_folders) && payload.local_folders.length > 0;
+
+	return {
+		localOnly: hasLocalFolders && !hasRepos && !hasDataSources,
+	};
+}
+
+function pickContentField(record: Record<string, unknown>): string | null {
+	if (typeof record.content === "string") {
+		return record.content;
+	}
+	if (typeof record.content_base64 === "string") {
+		return record.content_base64;
+	}
+	if (typeof record.contentBase64 === "string") {
+		return record.contentBase64;
+	}
+	return null;
+}
+
+function decodePossiblyEncodedText(
+	content: string,
+	metadata?: Record<string, unknown>,
+): string {
+	const encodingHint =
+		toLowerString(metadata?.content_encoding) ??
+		toLowerString(metadata?.contentEncoding) ??
+		toLowerString(metadata?.encoding);
+	const hintedBase64 = encodingHint?.includes("base64") ?? false;
+
+	const decodedBytes = decodeJsonByteArray(content);
+	if (decodedBytes !== null) {
+		return decodedBytes;
+	}
+
+	const decodedBase64 = decodeBase64ToUtf8(content);
+	if (hintedBase64 && decodedBase64) {
+		return decodedBase64;
+	}
+
+	if (
+		looksLikeBase64(content) &&
+		decodedBase64 &&
+		isProbablyPlaintext(decodedBase64)
+	) {
+		return decodedBase64;
+	}
+
+	const repaired = repairMojibake(content);
+	if (appearsReadable(repaired, content)) {
+		return repaired;
+	}
+
+	return content;
+}
+
+function isProbablyPlaintext(value: string): boolean {
+	if (value.length === 0) {
+		return false;
+	}
+	if (textScore(value) < 0.8) {
+		return false;
+	}
+	if (!/[A-Za-z]/.test(value)) {
+		return false;
+	}
+	if (/\s/.test(value)) {
+		return true;
+	}
+	return /[.,:;#/\-_]/.test(value);
+}
+
+function toLowerString(value: unknown): string | null {
+	return typeof value === "string" ? value.toLowerCase() : null;
+}
+
+function looksLikeBase64(content: string): boolean {
+	const compact = content.replace(/\s+/g, "");
+	if (compact.length < 24 || compact.length % 4 !== 0) {
+		return false;
+	}
+	return /^[A-Za-z0-9+/]+=*$/.test(compact);
+}
+
+function decodeBase64ToUtf8(content: string): string | null {
+	try {
+		const compact = content.replace(/\s+/g, "");
+		return Buffer.from(compact, "base64").toString("utf8");
+	} catch {
+		return null;
+	}
+}
+
+function decodeJsonByteArray(content: string): string | null {
+	const trimmed = content.trim();
+	if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+		return null;
+	}
+	try {
+		const parsed = JSON.parse(trimmed);
+		if (
+			Array.isArray(parsed) &&
+			parsed.length > 0 &&
+			parsed.every(
+				(byte) => typeof byte === "number" && byte >= 0 && byte <= 255,
+			)
+		) {
+			return Buffer.from(parsed).toString("utf8");
+		}
+	} catch {
+		// fall through
+	}
+	return null;
+}
+
+function repairMojibake(content: string): string {
+	try {
+		return Buffer.from(content, "latin1").toString("utf8");
+	} catch {
+		return content;
+	}
+}
+
+function textScore(value: string): number {
+	if (!value) {
+		return 0;
+	}
+
+	let printable = 0;
+	for (const char of value) {
+		const code = char.charCodeAt(0);
+		if (
+			code === 9 ||
+			code === 10 ||
+			code === 13 ||
+			(code >= 32 && code <= 126) ||
+			code >= 160
+		) {
+			printable += 1;
+		}
+	}
+
+	return printable / value.length;
+}
+
+function appearsReadable(candidate: string, baseline: string): boolean {
+	if (!candidate || candidate === baseline) {
+		return false;
+	}
+	return textScore(candidate) >= Math.max(0.8, textScore(baseline) + 0.05);
 }
 
 /**

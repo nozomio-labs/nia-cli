@@ -620,6 +620,117 @@ describe("cli sdk adapter", () => {
 		});
 	});
 
+	test("decodes base64 local-folder content responses", async () => {
+		await writeConfig({
+			apiKey: "nia_exp_key",
+			baseUrl: "https://apigcp.trynia.ai/v2",
+			useExperimentalApi: true,
+			output: undefined,
+		});
+		mockExperimentalSourceContentGet.mockImplementationOnce(
+			(params: { id: string | number }, input?: Record<string, unknown>) =>
+				Promise.resolve({
+					data: {
+						id: String(params.id),
+						path: "notes/private.md",
+						content: Buffer.from("# Local Notes\nhello world\n", "utf8").toString(
+							"base64",
+						),
+						metadata: {
+							source_type: "local_folder",
+							content_encoding: "base64",
+						},
+						query: input?.query,
+					},
+					error: null,
+					status: 200,
+				}),
+		);
+
+		const sdk = await createCliSdk();
+		const result = await sdk.sources.content("lf_1", {
+			path: "notes/private.md",
+		});
+
+		expect(result).toMatchObject({
+			content: "# Local Notes\nhello world\n",
+			metadata: {
+				source_type: "local_folder",
+			},
+		});
+	});
+
+	test("keeps local-folder snippets scoped in local-only query mode", async () => {
+		await writeConfig({
+			apiKey: "nia_exp_key",
+			baseUrl: "https://apigcp.trynia.ai/v2",
+			useExperimentalApi: true,
+			output: undefined,
+		});
+		mockExperimentalSearchPost.mockImplementationOnce(() =>
+			Promise.resolve({
+				data: {
+					mode: "query",
+					execution: "snippet_search",
+					query: "Where is nginx config?",
+					content: "Found one local match.",
+					sources: [
+						{
+							content: Buffer.from(
+								"nginx config is under /infra/nginx/app.rebeltails.net.conf",
+								"utf8",
+							).toString("base64"),
+							score: 0.98,
+							metadata: {
+								sourceType: "local_folder",
+								sourceId: "lf_1",
+								namespace: "local-folder_user_1_lf_1",
+							},
+						},
+						{
+							content: "This came from a public repository and should be filtered",
+							score: 0.42,
+							metadata: {
+								sourceType: "repository",
+								sourceId: "repo_1",
+								namespace: "repo_global_repo_1",
+							},
+						},
+					],
+					followUpQuestions: [],
+					readySources: [
+						{ id: "lf_1", type: "local_folder" },
+						{ id: "repo_1", type: "repository" },
+					],
+					blockedSources: [{ id: "repo_2", type: "repository" }],
+				},
+				error: null,
+				status: 200,
+			}),
+		);
+
+		const sdk = await createCliSdk();
+		const result = (await sdk.search.query({
+			mode: "query",
+			messages: [{ role: "user", content: "Where is nginx config?" }],
+			sources: [{ id: "lf_1" }],
+		})) as {
+			sources: Array<Record<string, unknown>>;
+			readySources: Array<Record<string, unknown>>;
+			blockedSources: Array<Record<string, unknown>>;
+		};
+
+		expect(result.sources).toHaveLength(1);
+		expect(result.sources[0]).toMatchObject({
+			content: "nginx config is under /infra/nginx/app.rebeltails.net.conf",
+			metadata: {
+				sourceType: "local_folder",
+			},
+		});
+		expect(result.readySources).toEqual([{ id: "lf_1", type: "local_folder" }]);
+		expect(result.blockedSources).toEqual([]);
+	});
+
 	test("calls sandbox endpoints via Eden when experimental mode is enabled", async () => {
 		await writeConfig({
 			apiKey: "nia_exp_key",
