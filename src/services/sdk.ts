@@ -607,7 +607,9 @@ function normalizeSourceContentResponse(response: unknown): unknown {
 	}
 
 	const normalized: Record<string, unknown> = { ...response };
-	const metadata = isRecord(normalized.metadata) ? normalized.metadata : undefined;
+	const metadata = isRecord(normalized.metadata)
+		? normalized.metadata
+		: undefined;
 	const sourceType =
 		toLowerString(normalized.source_type) ??
 		toLowerString(metadata?.source_type) ??
@@ -625,7 +627,7 @@ function normalizeSourceContentResponse(response: unknown): unknown {
 		typeof normalized.contentBase64 === "string";
 	if (
 		sourceType !== "local_folder" &&
-		!(encodingHint?.includes("base64")) &&
+		!encodingHint?.includes("base64") &&
 		!encodedFieldPresent
 	) {
 		return normalized;
@@ -662,7 +664,10 @@ function normalizeSourceGrepResponse(response: unknown): unknown {
 
 		const next: Record<string, unknown> = { ...match };
 		if (typeof next.line_content === "string") {
-			next.line_content = decodePossiblyEncodedText(next.line_content, metadata);
+			next.line_content = decodePossiblyEncodedText(
+				next.line_content,
+				metadata,
+			);
 		}
 		if (typeof next.content === "string") {
 			next.content = decodePossiblyEncodedText(next.content, metadata);
@@ -712,15 +717,13 @@ async function normalizeSearchQueryResponse(
 		if (Array.isArray(normalized.readySources)) {
 			normalized.readySources = normalized.readySources.filter(
 				(source) =>
-					isRecord(source) &&
-					toLowerString(source.type) === "local_folder",
+					isRecord(source) && toLowerString(source.type) === "local_folder",
 			);
 		}
 		if (Array.isArray(normalized.blockedSources)) {
 			normalized.blockedSources = normalized.blockedSources.filter(
 				(source) =>
-					isRecord(source) &&
-					toLowerString(source.type) === "local_folder",
+					isRecord(source) && toLowerString(source.type) === "local_folder",
 			);
 		}
 	}
@@ -728,7 +731,9 @@ async function normalizeSearchQueryResponse(
 	return normalized;
 }
 
-function deriveRequestedScope(payload: Record<string, unknown>): { localOnly: boolean } {
+function deriveRequestedScope(payload: Record<string, unknown>): {
+	localOnly: boolean;
+} {
 	if (isQuerySearchPayload(payload)) {
 		let hasNonLocal = false;
 		let hasAny = false;

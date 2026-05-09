@@ -633,9 +633,10 @@ describe("cli sdk adapter", () => {
 					data: {
 						id: String(params.id),
 						path: "notes/private.md",
-						content: Buffer.from("# Local Notes\nhello world\n", "utf8").toString(
-							"base64",
-						),
+						content: Buffer.from(
+							"# Local Notes\nhello world\n",
+							"utf8",
+						).toString("base64"),
 						metadata: {
 							source_type: "local_folder",
 							content_encoding: "base64",
@@ -688,7 +689,8 @@ describe("cli sdk adapter", () => {
 							},
 						},
 						{
-							content: "This came from a public repository and should be filtered",
+							content:
+								"This came from a public repository and should be filtered",
 							score: 0.42,
 							metadata: {
 								sourceType: "repository",
