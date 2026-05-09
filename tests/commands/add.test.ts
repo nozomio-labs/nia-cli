@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-	SUPPORTED_UPLOAD_CONTENT_TYPES,
 	resolveAddTarget,
+	SUPPORTED_UPLOAD_CONTENT_TYPES,
 } from "../../src/commands/add.ts";
 import { resolveUploadContentType } from "../../src/commands/sources.ts";
 

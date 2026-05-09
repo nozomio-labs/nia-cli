@@ -3,21 +3,21 @@ import path from "node:path";
 import { annotate } from "@crustjs/skills";
 import { OpenAPI, type SourceCreateRequest } from "nia-ai-ts";
 import { app } from "../app.ts";
-import { buildLocalSourceStatuses } from "./local.ts";
-import {
-	SOURCE_UPLOAD_CONTENT_TYPES,
-	resolveUploadContentType,
-} from "./sources.ts";
 import { resolveBaseUrl } from "../services/config.ts";
 import {
-	LocalApiError,
 	addLocalSource,
+	LocalApiError,
 	listLocalSources,
 } from "../services/local/api.ts";
 import { TYPE_FOLDER } from "../services/local/extractor.ts";
 import { createCliSdk, createSdk } from "../services/sdk.ts";
 import { createResponseError, withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
+import { buildLocalSourceStatuses } from "./local.ts";
+import {
+	resolveUploadContentType,
+	SOURCE_UPLOAD_CONTENT_TYPES,
+} from "./sources.ts";
 
 type AddTarget =
 	| { kind: "folder"; path: string }
@@ -109,7 +109,10 @@ async function uploadFileSource(options: {
 		}),
 	});
 	if (!uploadUrlResponse.ok) {
-		throw await createResponseError(uploadUrlResponse, "Failed to get upload URL");
+		throw await createResponseError(
+			uploadUrlResponse,
+			"Failed to get upload URL",
+		);
 	}
 
 	const uploadUrlResult = (await uploadUrlResponse.json()) as {
@@ -153,8 +156,7 @@ async function uploadFileSource(options: {
 const addSourceCommand = app
 	.sub("add")
 	.meta({
-		description:
-			"Quickly add a source from a folder path, file path, or URL",
+		description: "Quickly add a source from a folder path, file path, or URL",
 	})
 	.args([
 		{
@@ -240,7 +242,9 @@ const statusCommand = app
 	.run(async ({ flags }) => {
 		const fmt = createOutput({ color: flags.color });
 		await withErrorHandling({ domain: "Source status" }, async () => {
-			const sources = await listLocalSources(flags["api-key"] as string | undefined);
+			const sources = await listLocalSources(
+				flags["api-key"] as string | undefined,
+			);
 			const rows = buildLocalSourceStatuses(sources);
 			if (rows.length === 0) {
 				fmt.info("No sources configured.");
