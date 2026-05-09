@@ -9,6 +9,7 @@ import { skillPlugin } from "@crustjs/skills";
 import { createStore, stateDir } from "@crustjs/store";
 import pkg from "../package.json";
 import { app } from "./app.ts";
+import { addCommand, statusCommand } from "./commands/add";
 import { authCommand } from "./commands/auth";
 import { categoriesCommand } from "./commands/categories";
 import { connectorsCommand } from "./commands/connectors";
@@ -57,6 +58,8 @@ const cacheAdaptor: UpdateNotifierCacheAdapter = {
 };
 
 const main = app
+	.command(addCommand)
+	.command(statusCommand)
 	.command(authCommand)
 	.command(searchCommand)
 	.command(reposCommand)
