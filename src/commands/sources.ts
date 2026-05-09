@@ -37,6 +37,31 @@ type DocumentationSourceCreateRequest = SourceCreateRequest & {
 	extract_branding?: boolean;
 };
 
+export const SOURCE_UPLOAD_CONTENT_TYPES: Record<string, string> = {
+	".pdf": "application/pdf",
+	".csv": "text/csv",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+
+export function resolveUploadContentType(filePath: string): string {
+	const extension = path.extname(filePath).toLowerCase();
+	const contentType = SOURCE_UPLOAD_CONTENT_TYPES[extension];
+	if (contentType) {
+		return contentType;
+	}
+
+	const supportedTypes = Object.keys(SOURCE_UPLOAD_CONTENT_TYPES).join(", ");
+	if (extension === ".md" || extension === ".docx") {
+		throw new Error(
+			`Single-file ${extension} uploads are not supported yet. Supported file types: ${supportedTypes}. To index markdown/Word content, add the parent folder instead: \`nia add <folder-path>\` or \`nia local add <folder-path>\`.`,
+		);
+	}
+
+	throw new Error(
+		`Unsupported file type: ${extension || "(no extension)"}. Supported file types: ${supportedTypes}.`,
+	);
+}
+
 type ResolvedSourceMatchRow = {
 	id: string;
 	type: string;
@@ -1377,15 +1402,7 @@ const uploadCommand = app
 
 			const filePath = args.file;
 			const fileName = path.basename(filePath);
-			const ext = path.extname(filePath).toLowerCase();
-
-			const contentTypeMap: Record<string, string> = {
-				".pdf": "application/pdf",
-				".csv": "text/csv",
-				".xlsx":
-					"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-			};
-			const contentType = contentTypeMap[ext] ?? "application/octet-stream";
+			const contentType = resolveUploadContentType(filePath);
 
 			// Step 1: Get a signed upload URL
 			const uploadUrlResponse = await fetch(`${baseUrl}/sources/upload-url`, {
