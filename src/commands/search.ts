@@ -1,5 +1,6 @@
 import { annotate } from "@crustjs/skills";
 import { app } from "../app.ts";
+import { normalizeResolvedSourcesResponse } from "../services/compat/sources.ts";
 import { type ProjectScope, resolveScope } from "../services/project.ts";
 import {
 	type CliSandboxGitProvider,
@@ -202,6 +203,7 @@ export function buildExperimentalQuerySearchPayload(input: {
 	repos?: string;
 	docs?: string;
 	localFolders?: string;
+	localFolderIds?: string[];
 }): CliSearchQueryPayload {
 	return {
 		mode: "query",
@@ -215,12 +217,46 @@ export function buildExperimentalQuerySearchPayload(input: {
 				identifier,
 				type: "documentation" as const,
 			})),
+			...(input.localFolderIds ?? []).map((id) => ({ id })),
 			...splitCsvFlag(input.localFolders).map((identifier) => ({
 				identifier,
 				type: "local_folder" as const,
 			})),
 		],
 	};
+}
+
+async function resolveLocalFolderFilters(
+	cliSdk: Awaited<ReturnType<typeof createCliSdk>>,
+	localFolders: string[],
+): Promise<{ localFolderIds: string[]; unresolved: string[] }> {
+	const localFolderIds: string[] = [];
+	const unresolved: string[] = [];
+	const seen = new Set<string>();
+
+	for (const identifier of localFolders) {
+		try {
+			const result = await cliSdk.sources.resolve(identifier, "local_folder");
+			const normalized = normalizeResolvedSourcesResponse(result);
+			const resolved = normalized.items.find(
+				(item) => item.type === "local_folder" && typeof item.id === "string",
+			);
+			if (resolved?.id && !seen.has(resolved.id)) {
+				seen.add(resolved.id);
+				localFolderIds.push(resolved.id);
+				continue;
+			}
+		} catch {
+			// Fall back to querying by identifier below.
+		}
+
+		if (!seen.has(identifier)) {
+			seen.add(identifier);
+			unresolved.push(identifier);
+		}
+	}
+
+	return { localFolderIds, unresolved };
 }
 
 const universalCommand = annotate(
@@ -383,13 +419,26 @@ const queryCommand = annotate(
 							`Using nia.json scope: ${describeScope(scoped.scope)} (${scoped.scope.manifestPath})`,
 						);
 					}
+					const rawLocalFolders = splitCsvFlag(scoped.localFolders);
+					const resolvedLocalFilters = await resolveLocalFolderFilters(
+						cliSdk,
+						rawLocalFolders,
+					);
+					const effectiveLocalFolders = [
+						...resolvedLocalFilters.localFolderIds,
+						...resolvedLocalFilters.unresolved,
+					];
 
 					if (cliSdk.experimental) {
 						const payload = buildExperimentalQuerySearchPayload({
 							query: args.query,
 							repos: scoped.repos,
 							docs: scoped.docs,
-							localFolders: scoped.localFolders,
+							localFolders:
+								resolvedLocalFilters.unresolved.length > 0
+									? resolvedLocalFilters.unresolved.join(",")
+									: undefined,
+							localFolderIds: resolvedLocalFilters.localFolderIds,
 						});
 
 						if (payload.sources.length === 0) {
@@ -426,21 +475,23 @@ const queryCommand = annotate(
 					};
 					const repositories = splitCsvFlag(scoped.repos);
 					const dataSources = splitCsvFlag(scoped.docs);
-					const localFolders = splitCsvFlag(scoped.localFolders);
 					if (repositories.length > 0) {
 						params.repositories = repositories;
 					}
 					if (dataSources.length > 0) {
 						params.data_sources = dataSources;
 					}
-					if (localFolders.length > 0) {
-						params.local_folders = localFolders;
+					if (effectiveLocalFolders.length > 0) {
+						params.local_folders = effectiveLocalFolders;
 					}
 					params.search_mode = resolveQuerySearchMode({
 						explicit: flags["search-mode"],
 						repos: scoped.repos,
 						docs: scoped.docs,
-						localFolders: scoped.localFolders,
+						localFolders:
+							effectiveLocalFolders.length > 0
+								? effectiveLocalFolders.join(",")
+								: undefined,
 					});
 					if (flags.category) {
 						params.category = flags.category;

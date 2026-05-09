@@ -509,6 +509,27 @@ describe("search commands", () => {
 			});
 		});
 
+		test("builds experimental payload with strict local-folder ids", async () => {
+			const { buildExperimentalQuerySearchPayload } = await import(
+				"../../src/commands/search.ts"
+			);
+
+			expect(
+				buildExperimentalQuerySearchPayload({
+					query: "Where is nginx config?",
+					localFolders: "friendly-name",
+					localFolderIds: ["lf_abc123"],
+				}),
+			).toEqual({
+				mode: "query",
+				messages: [{ role: "user", content: "Where is nginx config?" }],
+				sources: [
+					{ id: "lf_abc123" },
+					{ identifier: "friendly-name", type: "local_folder" },
+				],
+			});
+		});
+
 		test("calls sdk.search.query with messages array", async () => {
 			const { createSdk } = await import("../../src/services/sdk.ts");
 			const sdk = await createSdk();
