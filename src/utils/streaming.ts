@@ -90,6 +90,70 @@ export async function renderStream(
 	}
 }
 
+/**
+ * Read a Server-Sent Events response body, parsing each `data:` line as JSON
+ * and passing the decoded event to `onEvent`.
+ *
+ * The Nia streaming endpoints (oracle chat, tracer, document agent, extract
+ * query) all use the same `data: {json}\n` framing. This consolidates the read
+ * loop that was previously copy-pasted across those commands and closes a gap
+ * shared by every copy: the trailing buffer was discarded once the stream
+ * ended, so a final `data:` frame sent without a closing newline was never
+ * parsed. Here the buffer is flushed after the reader reports `done`.
+ *
+ * Non-`data:` lines are ignored and payloads that fail to parse as JSON are
+ * skipped, preserving the lenient behavior the call sites relied on.
+ *
+ * @param body - The streaming response body (e.g. `response.body`).
+ * @param onEvent - Invoked once per successfully parsed event object.
+ */
+export async function readEventStream(
+	body: ReadableStream<Uint8Array>,
+	onEvent: (event: Record<string, unknown>) => void,
+): Promise<void> {
+	const reader = body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = "";
+
+	const handleLine = (line: string): void => {
+		if (!line.startsWith("data: ")) {
+			return;
+		}
+		const payload = line.slice(6).trim();
+		if (!payload) {
+			return;
+		}
+
+		let event: Record<string, unknown>;
+		try {
+			event = JSON.parse(payload) as Record<string, unknown>;
+		} catch {
+			// Skip malformed SSE payloads rather than aborting the stream.
+			return;
+		}
+		onEvent(event);
+	};
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) {
+			break;
+		}
+
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split("\n");
+		buffer = lines.pop() ?? "";
+		for (const line of lines) {
+			handleLine(line);
+		}
+	}
+
+	// Flush any bytes still held by the decoder and the final line, which can
+	// arrive without a trailing newline when the stream closes.
+	buffer += decoder.decode();
+	handleLine(buffer);
+}
+
 export function renderSandboxSearchStreamEvent(
 	event: SandboxSearchStreamEvent,
 	options: StreamRendererOptions = {},

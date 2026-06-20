@@ -5,6 +5,7 @@ import { resolveBaseUrl } from "../services/config.ts";
 import { createSdk } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
+import { readEventStream } from "../utils/streaming.ts";
 
 /**
  * Valid extraction types for status and list commands.
@@ -398,34 +399,14 @@ const queryCommand = annotate(
 				}
 
 				// SSE stream — parse and render answer chunks
-				const reader = response.body.getReader();
-				const decoder = new TextDecoder();
-				let buffer = "";
-
-				while (true) {
-					const { done, value } = await reader.read();
-					if (done) break;
-
-					buffer += decoder.decode(value, { stream: true });
-					const lines = buffer.split("\n");
-					buffer = lines.pop() ?? "";
-
-					for (const line of lines) {
-						if (!line.startsWith("data: ")) continue;
-						const payload = line.slice(6).trim();
-						if (!payload) continue;
-
-						try {
-							const event = JSON.parse(payload) as Record<string, unknown>;
-							if (
-								event.type === "answer_chunk" &&
-								typeof event.content === "string"
-							) {
-								process.stdout.write(event.content);
-							}
-						} catch {}
+				await readEventStream(response.body, (event) => {
+					if (
+						event.type === "answer_chunk" &&
+						typeof event.content === "string"
+					) {
+						process.stdout.write(event.content);
 					}
-				}
+				});
 
 				if (process.stdout.isTTY) {
 					console.log();
