@@ -7,7 +7,7 @@ import { createSdk } from "../services/sdk.ts";
 import { withErrorHandling } from "../utils/errors.ts";
 import { createOutput } from "../utils/output.ts";
 
-import { renderStreamEvent } from "../utils/streaming.ts";
+import { readEventStream, renderStreamEvent } from "../utils/streaming.ts";
 
 // --- Subcommands ---
 
@@ -166,33 +166,9 @@ const streamCommand = app
 				throw err;
 			}
 
-			// Parse SSE stream manually
-			if (!response.body) {
-				throw new Error("Response body is empty");
-			}
-			const reader = response.body.getReader();
-			const decoder = new TextDecoder();
-			let buffer = "";
-
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split("\n");
-				buffer = lines.pop() ?? "";
-
-				for (const line of lines) {
-					if (!line.startsWith("data: ")) continue;
-					const payload = line.slice(6).trim();
-					if (!payload) continue;
-
-					try {
-						const event = JSON.parse(payload) as Record<string, unknown>;
-						renderStreamEvent(event, { color: flags.color });
-					} catch {}
-				}
-			}
+			await readEventStream(response.body, (event) => {
+				renderStreamEvent(event, { color: flags.color });
+			});
 
 			// Print newline after stream completes for clean terminal state
 			if (process.stdout.isTTY) {
