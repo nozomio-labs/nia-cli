@@ -27,6 +27,14 @@ const mockPackageSearchGrep = mock(() =>
 	}),
 );
 
+const mockCreateTracerJob = mock(() =>
+	Promise.resolve({
+		job_id: "tracer_job_abc123",
+		status: "queued",
+		query: "How does error handling work?",
+	}),
+);
+
 mock.module("nia-ai-ts", () => ({
 	NiaSDK: class {
 		search = {};
@@ -40,12 +48,16 @@ mock.module("nia-ai-ts", () => ({
 	V2ApiPackageSearchService: {
 		packageSearchGrepV2V2PackageSearchGrepPost: mockPackageSearchGrep,
 	},
+	GithubSearchService: {
+		createTracerJobV2GithubTracerPost: mockCreateTracerJob,
+	},
 }));
 
 // --- Import after mocking ---
 
 import { depsCommand } from "../../src/commands/deps.ts";
 import { packagesCommand } from "../../src/commands/packages.ts";
+import { tracerCommand } from "../../src/commands/tracer.ts";
 
 async function captureStdout(run: () => Promise<void>): Promise<string> {
 	const lines: string[] = [];
@@ -215,5 +227,58 @@ describe("format-aware commands (deps analyze)", () => {
 
 		expect(plain).toContain("Total dependencies: 1");
 		expect(() => JSON.parse(plain)).toThrow();
+	});
+});
+
+// Commands that route their full payload through `fmt.output()` also print a
+// trailing human hint (e.g. how to stream a job). That hint is text-only:
+// emitting it under a machine format would corrupt the JSON/table payload.
+// `tracer run` is representative; `oracle run` and `extract` share the guard.
+describe("machine formats suppress trailing hints (tracer run)", () => {
+	beforeEach(async () => {
+		try {
+			await resetConfig();
+		} catch {
+			// Ignore
+		}
+
+		await writeConfig({
+			apiKey: "nia_test_output_key",
+			baseUrl: "https://apigcp.trynia.ai/v2",
+			output: undefined,
+		});
+
+		mockCreateTracerJob.mockClear();
+	});
+
+	afterEach(() => {
+		const dir = getConfigDirPath();
+		try {
+			rmSync(dir, { recursive: true, force: true });
+		} catch {
+			// Ignore
+		}
+	});
+
+	function run(...extraArgv: string[]): Promise<void> {
+		return tracerCommand.execute({
+			argv: ["run", "How does error handling work?", ...extraArgv],
+		});
+	}
+
+	test("--json emits a clean payload without the streaming hint", async () => {
+		const stdout = await captureStdout(() => run("--json"));
+		const plain = Bun.stripANSI(stdout);
+
+		const parsed = JSON.parse(plain);
+		expect(parsed.job_id).toBe("tracer_job_abc123");
+		expect(plain).not.toContain("to watch progress");
+	});
+
+	test("default text mode still prints the streaming hint", async () => {
+		const stdout = await captureStdout(() => run());
+		const plain = Bun.stripANSI(stdout);
+
+		expect(plain).toContain("nia tracer stream tracer_job_abc123");
 	});
 });

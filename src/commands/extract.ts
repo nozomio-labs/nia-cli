@@ -140,8 +140,10 @@ const tableCommand = annotate(
 
 				fmt.output(result);
 
+				// The next-step hint is for the human text view; skip it for
+				// machine formats so the payload stays a single clean document.
 				const extraction = result as Record<string, unknown>;
-				if (extraction.id) {
+				if (extraction.id && fmt.format === "text") {
 					console.log(
 						`\nUse \`nia extract status ${extraction.id} --type table\` to check progress`,
 					);
@@ -214,8 +216,10 @@ const detectCommand = annotate(
 
 				fmt.output(result);
 
+				// The next-step hint is for the human text view; skip it for
+				// machine formats so the payload stays a single clean document.
 				const extraction = result as Record<string, unknown>;
-				if (extraction.id) {
+				if (extraction.id && fmt.format === "text") {
 					console.log(
 						`\nUse \`nia extract status ${extraction.id} --type detect\` to check progress`,
 					);
@@ -294,8 +298,10 @@ const engineeringCommand = annotate(
 
 				fmt.output(result);
 
+				// The next-step hints are for the human text view; skip them for
+				// machine formats so the payload stays a single clean document.
 				const extraction = result as Record<string, unknown>;
-				if (extraction.id) {
+				if (extraction.id && fmt.format === "text") {
 					console.log(
 						`\nUse \`nia extract status ${extraction.id} --type engineering\` to check progress`,
 					);
@@ -354,10 +360,12 @@ const extractStatusCommand = app
 
 			fmt.output(result);
 
+			// The "still processing" hint is for the human text view; skip it
+			// for machine formats so the payload stays a single clean document.
 			const extraction = result as Record<string, unknown>;
 			if (
-				extraction.status === "processing" ||
-				extraction.status === "queued"
+				fmt.format === "text" &&
+				(extraction.status === "processing" || extraction.status === "queued")
 			) {
 				console.log(
 					"\nExtraction is still processing. Check again later with:",
