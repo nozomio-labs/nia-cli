@@ -250,7 +250,11 @@ const universalCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling(
 				{ domain: "Search", verbose: Boolean(flags.verbose) },
@@ -363,7 +367,11 @@ const queryCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling(
 				{ domain: "Search", verbose: Boolean(flags.verbose) },
@@ -516,7 +524,11 @@ const webCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			// Validate category if provided
 			if (
@@ -578,7 +590,11 @@ const sandboxJobCommand = annotate(
 			},
 		] as const)
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling(
 				{ domain: "Search", verbose: Boolean(flags.verbose) },
@@ -627,12 +643,16 @@ const sandboxSearchCommand = annotate(
 			stream: {
 				type: "boolean",
 				description:
-					"Stream sandbox progress updates (use --no-stream to disable)",
+					"Stream sandbox progress updates (ignored for --json/--output; use --no-stream to disable)",
 				default: true,
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling(
 				{ domain: "Search", verbose: Boolean(flags.verbose) },
@@ -648,7 +668,10 @@ const sandboxSearchCommand = annotate(
 							: {}),
 					};
 
-					if (flags.stream === false) {
+					// Streaming SSE activity is only meaningful for the human `text`
+					// view; a machine format (`json`/`table`) wants the final payload
+					// alone, so route those through the non-streaming path.
+					if (flags.stream === false || fmt.format !== "text") {
 						const result = await cliSdk.sandbox.search(body);
 						if (typeof result === "object" && result !== null) {
 							if (process.stdout.isTTY && fmt.format === "text") {
@@ -756,7 +779,11 @@ const deepCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling(
 				{ domain: "Search", verbose: Boolean(flags.verbose) },

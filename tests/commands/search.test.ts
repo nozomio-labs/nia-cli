@@ -694,6 +694,39 @@ describe("search commands", () => {
 			expect(plainStdout).not.toContain("workspaceKind");
 		});
 
+		test("routes --json to the non-streaming path and emits a single JSON object", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const { stdout, stderr } = await captureCommandOutput(() =>
+				searchCommand.execute({
+					argv: [
+						"sandbox",
+						"--json",
+						"-r",
+						"https://github.com/acme/widget",
+						"Where is the auth middleware?",
+					],
+				}),
+			);
+			const plainStdout = Bun.stripANSI(stdout);
+
+			// A machine format must bypass the SSE stream and use the
+			// non-streaming eden path, so stdout is a single parseable payload
+			// with no interleaved progress activity.
+			expect(stderr).toBe("");
+			expect(mockFetch).not.toHaveBeenCalled();
+			expect(mockSandboxSearchPost).toHaveBeenCalledTimes(1);
+			expect(plainStdout).not.toContain("Tool read");
+			const parsed = JSON.parse(plainStdout);
+			expect(parsed.result.answer).toBe("Sandbox agent answer");
+		});
+
 		test("passes optional ref to streamed sandbox search", async () => {
 			await writeConfig({
 				apiKey: "nia_test_search_key",

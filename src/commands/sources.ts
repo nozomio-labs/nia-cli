@@ -245,7 +245,11 @@ const indexCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 			const url = await resolveIndexUrl(args.url);
 
 			await withErrorHandling({ domain: "Source" }, async () => {
@@ -313,7 +317,11 @@ const listCommand = app
 		},
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const sourceType = validateSourceType(flags.type);
 
@@ -417,7 +425,11 @@ const getCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const sourceType = validateSourceType(flags.type);
 
@@ -449,7 +461,11 @@ const resolveCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			const sourceType = validateSourceType(flags.type);
 
@@ -524,7 +540,11 @@ const updateCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const sourceType = validateSourceType(flags.type);
 
@@ -570,7 +590,11 @@ const deleteCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const sourceType = validateSourceType(flags.type);
 
@@ -603,7 +627,11 @@ const syncCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const sourceType = validateSourceType(flags.type);
 
@@ -659,7 +687,11 @@ const renameCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Source" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -721,7 +753,11 @@ const readCommand = app
 		},
 	})
 	.run(async ({ args, flags, rawArgs }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		validateSourceType(flags.type);
 
@@ -793,7 +829,11 @@ const grepCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		validateSourceType(flags.type);
 
@@ -858,7 +898,11 @@ const treeCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		validateSourceType(flags.type);
 
@@ -904,7 +948,11 @@ const lsCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Source" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -946,7 +994,11 @@ const subscribeCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling({ domain: "Source" }, async () => {
 				await createSdk({ apiKey: flags["api-key"] });
@@ -1021,7 +1073,11 @@ const exploreCommand = annotate(
 			},
 		})
 		.run(async ({ flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 			const sourceType = validateSourceType(flags.type);
 
 			await withErrorHandling({ domain: "Source" }, async () => {
@@ -1125,7 +1181,11 @@ const writeCommand = app
 		},
 	})
 	.run(async ({ args, flags, rawArgs }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		if (!flags.body && !flags.file) {
 			fmt.error("Provide either --body or --file to specify file content.");
@@ -1199,7 +1259,11 @@ const mvCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags, rawArgs }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const oldPath = resolvePathArg(args["old-path"], rawArgs, "old-path", 0);
 		const newPath = resolvePathArg(args["new-path"], rawArgs, "new-path", 1);
@@ -1249,7 +1313,11 @@ const mkdirCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags, rawArgs }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const dirPath = resolvePathArg(args.path, rawArgs, "path");
 
@@ -1295,7 +1363,11 @@ const rmCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags, rawArgs }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const filePath = resolvePathArg(args.path, rawArgs, "path");
 
@@ -1327,7 +1399,11 @@ const summaryCommand = app
 	.sub("summary")
 	.meta({ description: "Quick inventory of all source types" })
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Source" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -1368,7 +1444,11 @@ const uploadCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Source" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });

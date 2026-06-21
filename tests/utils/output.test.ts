@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import {
 	createOutput,
 	OutputRenderer,
 	resolveOutputFormat,
 	truncate,
+	validateOutputFormat,
 } from "../../src/utils/output.ts";
 
 describe("resolveOutputFormat", () => {
@@ -25,52 +26,60 @@ describe("resolveOutputFormat", () => {
 		expect(resolveOutputFormat("TEXT")).toBe("text");
 	});
 
-	test("defaults to 'text' when no format specified and not TTY", () => {
-		const origIsTTY = process.stdout.isTTY;
-		Object.defineProperty(process.stdout, "isTTY", {
-			value: false,
-			configurable: true,
-		});
-		try {
-			expect(resolveOutputFormat()).toBe("text");
-		} finally {
-			Object.defineProperty(process.stdout, "isTTY", {
-				value: origIsTTY,
-				configurable: true,
-			});
-		}
-	});
-
-	test("defaults to 'text' when no format specified and is TTY", () => {
-		const origIsTTY = process.stdout.isTTY;
-		Object.defineProperty(process.stdout, "isTTY", {
-			value: true,
-			configurable: true,
-		});
-		try {
-			expect(resolveOutputFormat()).toBe("text");
-		} finally {
-			Object.defineProperty(process.stdout, "isTTY", {
-				value: origIsTTY,
-				configurable: true,
-			});
-		}
+	test("defaults to 'text' when no format specified", () => {
+		expect(resolveOutputFormat()).toBe("text");
 	});
 
 	test("falls through to text for invalid format", () => {
-		const origIsTTY = process.stdout.isTTY;
-		Object.defineProperty(process.stdout, "isTTY", {
-			value: false,
-			configurable: true,
-		});
-		try {
-			expect(resolveOutputFormat("invalid")).toBe("text");
-		} finally {
-			Object.defineProperty(process.stdout, "isTTY", {
-				value: origIsTTY,
-				configurable: true,
-			});
-		}
+		expect(resolveOutputFormat("invalid")).toBe("text");
+	});
+});
+
+describe("validateOutputFormat", () => {
+	const mockExit = mock((code?: number) => {
+		throw new Error(`process.exit(${code})`);
+	});
+	const originalExit = process.exit;
+	let consoleErrorOutput: string[];
+	let originalConsoleError: typeof console.error;
+
+	beforeEach(() => {
+		consoleErrorOutput = [];
+		// biome-ignore lint/suspicious/noExplicitAny: test mock override
+		process.exit = mockExit as any;
+		originalConsoleError = console.error;
+		console.error = ((...args: unknown[]) => {
+			consoleErrorOutput.push(args.map(String).join(" "));
+		}) as typeof console.error;
+	});
+
+	afterEach(() => {
+		process.exit = originalExit;
+		console.error = originalConsoleError;
+		mock.restore();
+	});
+
+	test("accepts supported formats", () => {
+		expect(() => validateOutputFormat("json")).not.toThrow();
+		expect(() => validateOutputFormat("table")).not.toThrow();
+		expect(() => validateOutputFormat("text")).not.toThrow();
+		expect(() => validateOutputFormat("JSON")).not.toThrow();
+	});
+
+	test("accepts an unset value", () => {
+		expect(() => validateOutputFormat(undefined)).not.toThrow();
+	});
+
+	test("exits with an error for an unsupported format", () => {
+		expect(() => validateOutputFormat("jsonl")).toThrow("process.exit(1)");
+		expect(consoleErrorOutput.join("\n")).toContain(
+			'Invalid output format: "jsonl"',
+		);
+		expect(consoleErrorOutput.join("\n")).toContain("json, table, text");
+	});
+
+	test("createOutput rejects an unsupported format", () => {
+		expect(() => createOutput({ output: "xml" })).toThrow("process.exit(1)");
 	});
 });
 
@@ -278,6 +287,21 @@ describe("createOutput", () => {
 	test("respects explicit output format", () => {
 		const fmt = createOutput({ output: "json" });
 		expect(fmt.format).toBe("json");
+	});
+
+	test("forces json when the json shorthand is set", () => {
+		const fmt = createOutput({ json: true });
+		expect(fmt.format).toBe("json");
+	});
+
+	test("json shorthand takes precedence over output", () => {
+		const fmt = createOutput({ json: true, output: "table" });
+		expect(fmt.format).toBe("json");
+	});
+
+	test("ignores the json shorthand when false", () => {
+		const fmt = createOutput({ json: false, output: "table" });
+		expect(fmt.format).toBe("table");
 	});
 
 	test("respects color option", () => {

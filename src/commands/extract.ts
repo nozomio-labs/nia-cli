@@ -98,7 +98,11 @@ const tableCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			if (!flags.schema) {
 				fmt.error(
@@ -180,7 +184,11 @@ const detectCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling({ domain: "Extract" }, async () => {
 				await createSdk({ apiKey: flags["api-key"] });
@@ -247,7 +255,11 @@ const engineeringCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			if (
 				flags.accuracy &&
@@ -319,7 +331,11 @@ const extractStatusCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const type = (flags.type ?? "table") as ExtractionType;
 		if (!EXTRACTION_TYPES.includes(type)) {
@@ -453,7 +469,11 @@ const listCommand = app
 		},
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		if (flags.type && flags.type !== "table" && flags.type !== "engineering") {
 			fmt.error(

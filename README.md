@@ -65,6 +65,8 @@ All commands inherit these options:
 - `--api-key` Override API key for a single command
 - `--verbose` Enable verbose output
 - `--color` Toggle colored output
+- `--output` Output format: `json`, `table`, or `text` (default). `table` is best for flat, list-style results
+- `--json` Shorthand for `--output json`
 
 ## Development
 

@@ -138,7 +138,11 @@ const createCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			let schemaMd: string | undefined;
 			if (flags["schema-file"]) {
@@ -169,7 +173,11 @@ const listCommand = app
 		offset: { type: "number", description: "Pagination offset" },
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const result = await vaultFetch("GET", "", flags["api-key"], undefined, {
 				limit: flags.limit,
@@ -186,7 +194,11 @@ const getCommand = app
 		{ name: "id", type: "string", description: "Vault ID", required: true },
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const result = await vaultFetch("GET", `/${args.id}`, flags["api-key"]);
 			fmt.output(result);
@@ -203,7 +215,11 @@ const infoCommand = app
 		{ name: "id", type: "string", description: "Vault ID", required: true },
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const result = await vaultFetch("GET", `/${args.id}`, flags["api-key"]);
 			fmt.output(result);
@@ -220,7 +236,11 @@ const deleteCommand = app
 		{ name: "id", type: "string", description: "Vault ID", required: true },
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const result = await vaultFetch(
 				"DELETE",
@@ -244,7 +264,11 @@ const renameCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const result = await vaultFetch(
 				"PATCH",
@@ -272,7 +296,11 @@ const updateSchemaCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const fs = await import("node:fs");
 			const schemaMd = fs.readFileSync(args.file, "utf8");
@@ -310,7 +338,11 @@ const addSourceCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			if (flags.all) {
 				const sourceIds = await fetchAllAvailableVaultSources((query) =>
@@ -373,7 +405,11 @@ const removeSourceCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const result = await vaultFetch(
 				"DELETE",
@@ -391,7 +427,11 @@ const listSourcesCommand = app
 		{ name: "id", type: "string", description: "Vault ID", required: true },
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const result = await vaultFetch(
 				"GET",
@@ -431,7 +471,11 @@ function makeRunCommand(mode: VaultMode, description: string) {
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 			await withErrorHandling({ domain: "Vault" }, async () => {
 				const sourceIds = (flags.source as string | undefined)
 					?.split(",")
@@ -490,7 +534,11 @@ const autoSyncCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const state = String(args.state).toLowerCase();
 			if (state !== "on" && state !== "off") {
@@ -522,7 +570,11 @@ const autoDreamCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const state = String(args.state).toLowerCase();
 			if (state !== "on" && state !== "off") {
@@ -545,7 +597,11 @@ const cancelCommand = app
 		{ name: "id", type: "string", description: "Vault ID", required: true },
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const result = await vaultFetch(
 				"POST",
@@ -588,7 +644,11 @@ const searchCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const result = await vaultFetch(
 				"POST",
@@ -964,7 +1024,11 @@ const initCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Vault" }, async () => {
 			const sourceIds = (flags["from-source"] as string | undefined)
 				?.split(",")

@@ -54,6 +54,17 @@ export const app = new Crust(APP_NAME)
 			default: true,
 			inherit: true,
 		},
+		output: {
+			type: "string",
+			description: "Render results as json, table, or text (default)",
+			inherit: true,
+		},
+		json: {
+			type: "boolean",
+			description: "Shorthand for --output json",
+			default: false,
+			inherit: true,
+		},
 	})
 	.run(({ command, flags }) =>
 		runRootCommand({

@@ -47,7 +47,11 @@ const jobCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			// Interactive mode: prompt for missing required arg and optional fields
 			const query = await input({
@@ -120,7 +124,11 @@ const statusCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Oracle" }, async () => {
 			const sdk = await createSdk({ apiKey: flags["api-key"] });
@@ -195,7 +203,11 @@ const jobsCommand = app
 		},
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		// Validate status if provided
 		const validStatuses = [
@@ -285,7 +297,11 @@ const sessionsCommand = app
 		},
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Oracle" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -328,7 +344,11 @@ const sessionCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Oracle" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -383,7 +403,11 @@ const messagesCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Oracle" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });

@@ -48,7 +48,11 @@ const listCommand = app
 	.sub("list")
 	.meta({ description: "List available connector types" })
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Connectors" }, async () => {
 			const result = await connectorFetch(flags, "/connectors");
@@ -60,7 +64,11 @@ const installationsCommand = app
 	.sub("installations")
 	.meta({ description: "List connector installations" })
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Connectors" }, async () => {
 			const result = await connectorFetch(flags, "/connectors/installations");
@@ -80,7 +88,11 @@ const installCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Connectors" }, async () => {
 			const result = await connectorFetch(
@@ -104,7 +116,11 @@ const statusCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Connectors" }, async () => {
 			const result = await connectorFetch(
@@ -127,7 +143,11 @@ const indexCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Connectors" }, async () => {
 			const result = await connectorFetch(
@@ -151,7 +171,11 @@ const deleteCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Connectors" }, async () => {
 			const result = await connectorFetch(

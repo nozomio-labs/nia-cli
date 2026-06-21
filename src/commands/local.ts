@@ -240,7 +240,11 @@ const addCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Local sync" }, async () => {
 			const folderPath = validateDirectory(args.path);
@@ -258,7 +262,11 @@ const statusCommand = app
 	.sub("status")
 	.meta({ description: "List local folder sync sources and status" })
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Local sync" }, async () => {
 			const sources = await listLocalSources(flags["api-key"]);
@@ -419,7 +427,11 @@ const installWatcherCommand = app
 		},
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Watcher install" }, async () => {
 			const result = await installWatcher({
 				apiKey: flags["api-key"],
@@ -447,7 +459,11 @@ const uninstallWatcherCommand = app
 			"Stop and remove the `nia local watch` LaunchAgent installed by `install-watcher`.",
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Watcher uninstall" }, async () => {
 			const result = uninstallWatcher();
 			fmt.output({ stage: "uninstalled", ...result });
@@ -461,7 +477,11 @@ const watcherStatusCommand = app
 			"Show the status of the `nia local watch` LaunchAgent (loaded, pid, last exit, log tail).",
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Watcher status" }, async () => {
 			fmt.output(watcherStatus());
 		});
@@ -500,7 +520,11 @@ const doctorCommand = app
 	.sub("doctor")
 	.meta({ description: "Run diagnostics for local data source access" })
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Doctor" }, async () => {
 			const checks: Array<{ source: string; status: string; detail: string }> =

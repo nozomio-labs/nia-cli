@@ -1327,7 +1327,11 @@ const statusCommand = app
 			"Probe the current OS for all known personal-data sources applicable to that platform (macOS: 30+ including iMessage, browsers, knowledge tools, calendars, mail, journals, code histories; Windows: Chrome/Firefox history, Obsidian, VSCode/Cursor workspaces, Claude Code sessions) and report which exist, which are readable, which are already registered with Nia, and which need new backend extractors.",
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Personal" }, async () => {
 			const results = await discoverAll(flags["api-key"]);
 			const groups = groupByTier(results);
@@ -1423,7 +1427,11 @@ const initCommand = app
 		},
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Personal" }, async () => {
 			const enableList = parseEnableList(flags.enable as string | undefined);
 			const enableAll =
@@ -1694,7 +1702,11 @@ const syncCommand = app
 			"Trigger a one-time sync for all registered personal-data sources. Equivalent to `nia local sync` but scoped to personal-data connectors only.",
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		await withErrorHandling({ domain: "Personal" }, async () => {
 			// Delegate to the existing nia local sync via a hint message — implementing
 			// a separate sync path here would duplicate the local syncer's batch

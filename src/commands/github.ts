@@ -53,7 +53,11 @@ const globCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "GitHub" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -127,7 +131,11 @@ const readCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "GitHub" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -198,7 +206,11 @@ const searchCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling({ domain: "GitHub" }, async () => {
 				await createSdk({ apiKey: flags["api-key"] });
@@ -276,7 +288,11 @@ const treeCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const { owner, repo } = parseOwnerRepo(args.repo);
 
