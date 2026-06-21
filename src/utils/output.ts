@@ -227,8 +227,12 @@ export class OutputRenderer {
 		console.log(result);
 	}
 
+	// Diagnostics go to stderr so that the data payload from `output()` is the
+	// only thing on stdout. This keeps `nia <cmd> --json | jq` clean even when a
+	// command prints a status line (e.g. "nia.json detected …") before its
+	// result. Mirrors the Unix convention shared by `warn`/`error`.
 	success(message: string): void {
-		console.log(this.style.green(message));
+		console.error(this.style.green(message));
 	}
 
 	warn(message: string): void {
@@ -240,7 +244,7 @@ export class OutputRenderer {
 	}
 
 	info(message: string): void {
-		console.log(this.style.dim(message));
+		console.error(this.style.dim(message));
 	}
 
 	private formatStatus(status: string): string {

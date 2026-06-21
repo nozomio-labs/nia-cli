@@ -7,8 +7,11 @@ import {
 	mock,
 	test,
 } from "bun:test";
-import { rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { formatWithOptions } from "node:util";
+import { MANIFEST_FILENAME } from "../../src/services/project.ts";
 import {
 	getConfigDirPath,
 	resetConfig,
@@ -633,6 +636,44 @@ describe("search commands", () => {
 			} finally {
 				console.log = originalLog;
 				console.error = originalError;
+			}
+		});
+
+		// Regression: the auto-scope status line is a diagnostic and must land on
+		// stderr, never stdout, so that `nia search query --json | jq` stays
+		// parseable even when a `nia.json` manifest triggers the scope hint. This
+		// exercises the renderer-level routing (`fmt.info` -> stderr) end to end.
+		test("--json keeps the auto-scope hint off stdout so the payload stays parseable", async () => {
+			const manifestDir = mkdtempSync(path.join(os.tmpdir(), "nia-scope-"));
+			writeFileSync(
+				path.join(manifestDir, MANIFEST_FILENAME),
+				JSON.stringify({
+					version: 1,
+					sources: ["vercel/next.js"],
+					vaults: [],
+					local: [],
+				}),
+				"utf8",
+			);
+
+			const originalCwd = process.cwd();
+			process.chdir(manifestDir);
+
+			try {
+				const { searchCommand } = await import("../../src/commands/search.ts");
+				const { stdout, stderr } = await captureCommandOutput(() =>
+					searchCommand.execute({
+						argv: ["query", "How does auth work?", "--json"],
+					}),
+				);
+
+				const parsed = JSON.parse(stdout);
+				expect(parsed.answer).toBe("test answer");
+				expect(stdout).not.toContain("Using nia.json scope");
+				expect(stderr).toContain("Using nia.json scope");
+			} finally {
+				process.chdir(originalCwd);
+				rmSync(manifestDir, { recursive: true, force: true });
 			}
 		});
 	});

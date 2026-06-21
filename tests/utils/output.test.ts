@@ -385,10 +385,10 @@ describe("OutputRenderer convenience methods", () => {
 		console.error = originalError;
 	});
 
-	test("success writes to stdout", () => {
+	test("success writes to stderr", () => {
 		const fmt = new OutputRenderer({ color: false });
 		fmt.success("done");
-		expect(logOutput[0]).toBe("done");
+		expect(errOutput[0]).toBe("done");
 	});
 
 	test("warn writes to stderr", () => {
@@ -403,9 +403,9 @@ describe("OutputRenderer convenience methods", () => {
 		expect(errOutput[0]).toBe("failure");
 	});
 
-	test("info writes to stdout", () => {
+	test("info writes to stderr", () => {
 		const fmt = new OutputRenderer({ color: false });
 		fmt.info("note");
-		expect(logOutput[0]).toBe("note");
+		expect(errOutput[0]).toBe("note");
 	});
 });
