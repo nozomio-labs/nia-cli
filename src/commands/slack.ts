@@ -66,7 +66,11 @@ const installCommand = app
 	.sub("install")
 	.meta({ description: "Generate Slack OAuth install URL" })
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Slack" }, async () => {
 			const result = await slackFetch(flags, "/slack/install", {
@@ -91,7 +95,11 @@ const installTokenCommand = app
 		},
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Slack" }, async () => {
 			const body: Record<string, unknown> = {
@@ -113,7 +121,11 @@ const listCommand = app
 	.sub("list")
 	.meta({ description: "List Slack installations" })
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Slack" }, async () => {
 			const result = await slackFetch(flags, "/slack/installations");
@@ -133,7 +145,11 @@ const channelsCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Slack" }, async () => {
 			const result = await slackFetch(
@@ -172,7 +188,11 @@ const grepCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Slack" }, async () => {
 			const body: Record<string, unknown> = {
@@ -216,7 +236,11 @@ const messagesCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Slack" }, async () => {
 			const query: Record<string, string> = {};
@@ -248,7 +272,11 @@ const indexCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Slack" }, async () => {
 			const result = await slackFetch(
@@ -272,7 +300,11 @@ const statusCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Slack" }, async () => {
 			const result = await slackFetch(
@@ -295,7 +327,11 @@ const deleteCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Slack" }, async () => {
 			const result = await slackFetch(

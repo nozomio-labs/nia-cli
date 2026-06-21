@@ -100,7 +100,11 @@ const saveCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		// Validate memory type if provided
 		if (flags["memory-type"]) {
@@ -181,7 +185,11 @@ const listCommand = app
 		},
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		// Validate memory type if provided
 		if (flags["memory-type"]) {
@@ -262,7 +270,11 @@ const searchCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Context" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -329,7 +341,11 @@ const semanticCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Context" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -471,7 +487,11 @@ const updateCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		// Validate memory type if provided
 		if (flags["memory-type"]) {

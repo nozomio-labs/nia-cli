@@ -98,7 +98,11 @@ const tableCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			if (!flags.schema) {
 				fmt.error(
@@ -136,8 +140,10 @@ const tableCommand = annotate(
 
 				fmt.output(result);
 
+				// The next-step hint is for the human text view; skip it for
+				// machine formats so the payload stays a single clean document.
 				const extraction = result as Record<string, unknown>;
-				if (extraction.id) {
+				if (extraction.id && fmt.format === "text") {
 					console.log(
 						`\nUse \`nia extract status ${extraction.id} --type table\` to check progress`,
 					);
@@ -180,7 +186,11 @@ const detectCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling({ domain: "Extract" }, async () => {
 				await createSdk({ apiKey: flags["api-key"] });
@@ -206,8 +216,10 @@ const detectCommand = annotate(
 
 				fmt.output(result);
 
+				// The next-step hint is for the human text view; skip it for
+				// machine formats so the payload stays a single clean document.
 				const extraction = result as Record<string, unknown>;
-				if (extraction.id) {
+				if (extraction.id && fmt.format === "text") {
 					console.log(
 						`\nUse \`nia extract status ${extraction.id} --type detect\` to check progress`,
 					);
@@ -247,7 +259,11 @@ const engineeringCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			if (
 				flags.accuracy &&
@@ -282,8 +298,10 @@ const engineeringCommand = annotate(
 
 				fmt.output(result);
 
+				// The next-step hints are for the human text view; skip them for
+				// machine formats so the payload stays a single clean document.
 				const extraction = result as Record<string, unknown>;
-				if (extraction.id) {
+				if (extraction.id && fmt.format === "text") {
 					console.log(
 						`\nUse \`nia extract status ${extraction.id} --type engineering\` to check progress`,
 					);
@@ -319,7 +337,11 @@ const extractStatusCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		const type = (flags.type ?? "table") as ExtractionType;
 		if (!EXTRACTION_TYPES.includes(type)) {
@@ -338,10 +360,12 @@ const extractStatusCommand = app
 
 			fmt.output(result);
 
+			// The "still processing" hint is for the human text view; skip it
+			// for machine formats so the payload stays a single clean document.
 			const extraction = result as Record<string, unknown>;
 			if (
-				extraction.status === "processing" ||
-				extraction.status === "queued"
+				fmt.format === "text" &&
+				(extraction.status === "processing" || extraction.status === "queued")
 			) {
 				console.log(
 					"\nExtraction is still processing. Check again later with:",
@@ -453,7 +477,11 @@ const listCommand = app
 		},
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		if (flags.type && flags.type !== "table" && flags.type !== "engineering") {
 			fmt.error(

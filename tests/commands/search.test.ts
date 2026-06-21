@@ -7,8 +7,11 @@ import {
 	mock,
 	test,
 } from "bun:test";
-import { rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { formatWithOptions } from "node:util";
+import { MANIFEST_FILENAME } from "../../src/services/project.ts";
 import {
 	getConfigDirPath,
 	resetConfig,
@@ -635,6 +638,44 @@ describe("search commands", () => {
 				console.error = originalError;
 			}
 		});
+
+		// Regression: the auto-scope status line is a diagnostic and must land on
+		// stderr, never stdout, so that `nia search query --json | jq` stays
+		// parseable even when a `nia.json` manifest triggers the scope hint. This
+		// exercises the renderer-level routing (`fmt.info` -> stderr) end to end.
+		test("--json keeps the auto-scope hint off stdout so the payload stays parseable", async () => {
+			const manifestDir = mkdtempSync(path.join(os.tmpdir(), "nia-scope-"));
+			writeFileSync(
+				path.join(manifestDir, MANIFEST_FILENAME),
+				JSON.stringify({
+					version: 1,
+					sources: ["vercel/next.js"],
+					vaults: [],
+					local: [],
+				}),
+				"utf8",
+			);
+
+			const originalCwd = process.cwd();
+			process.chdir(manifestDir);
+
+			try {
+				const { searchCommand } = await import("../../src/commands/search.ts");
+				const { stdout, stderr } = await captureCommandOutput(() =>
+					searchCommand.execute({
+						argv: ["query", "How does auth work?", "--json"],
+					}),
+				);
+
+				const parsed = JSON.parse(stdout);
+				expect(parsed.answer).toBe("test answer");
+				expect(stdout).not.toContain("Using nia.json scope");
+				expect(stderr).toContain("Using nia.json scope");
+			} finally {
+				process.chdir(originalCwd);
+				rmSync(manifestDir, { recursive: true, force: true });
+			}
+		});
 	});
 
 	describe("sandbox search", () => {
@@ -692,6 +733,39 @@ describe("search commands", () => {
 			expect(plainStdout).not.toContain("Sandbox job:");
 			expect(plainStdout).not.toContain("Status: running");
 			expect(plainStdout).not.toContain("workspaceKind");
+		});
+
+		test("routes --json to the non-streaming path and emits a single JSON object", async () => {
+			await writeConfig({
+				apiKey: "nia_test_search_key",
+				baseUrl: "https://apigcp.trynia.ai/v2",
+				useExperimentalApi: false,
+				output: undefined,
+			});
+
+			const { searchCommand } = await import("../../src/commands/search.ts");
+			const { stdout, stderr } = await captureCommandOutput(() =>
+				searchCommand.execute({
+					argv: [
+						"sandbox",
+						"--json",
+						"-r",
+						"https://github.com/acme/widget",
+						"Where is the auth middleware?",
+					],
+				}),
+			);
+			const plainStdout = Bun.stripANSI(stdout);
+
+			// A machine format must bypass the SSE stream and use the
+			// non-streaming eden path, so stdout is a single parseable payload
+			// with no interleaved progress activity.
+			expect(stderr).toBe("");
+			expect(mockFetch).not.toHaveBeenCalled();
+			expect(mockSandboxSearchPost).toHaveBeenCalledTimes(1);
+			expect(plainStdout).not.toContain("Tool read");
+			const parsed = JSON.parse(plainStdout);
+			expect(parsed.result.answer).toBe("Sandbox agent answer");
 		});
 
 		test("passes optional ref to streamed sandbox search", async () => {

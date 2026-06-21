@@ -2,38 +2,62 @@ import type { StyleInstance } from "@crustjs/style";
 import { createStyle, table as styleTable } from "@crustjs/style";
 
 /**
+ * Supported output formats. Single source of truth for the type, the
+ * resolver, and flag validation.
+ */
+export const OUTPUT_FORMATS = ["json", "table", "text"] as const;
+
+/**
  * Output format modes.
  */
-export type OutputFormat = "json" | "table" | "text";
+export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
 
 /**
  * Options for creating an output helper.
  */
 export interface OutputOptions {
-	/** Explicit output format. Overrides TTY auto-detection. */
+	/** Explicit output format: "json", "table", or "text". Defaults to "text". */
 	output?: string;
+	/** Shorthand that forces JSON output, taking precedence over `output`. */
+	json?: boolean;
 	/** Whether color output is enabled. */
 	color?: boolean;
 }
 
 /**
- * Resolve the output format.
+ * Resolve the output format from an explicit value.
  *
- * For now, CLI output is always text unless explicitly overridden.
+ * Returns the matching format when `output` is "json", "table", or "text"
+ * (case-insensitive); falls back to "text" for anything else, including an
+ * unset value.
  */
 export function resolveOutputFormat(output?: string): OutputFormat {
 	if (output) {
 		const normalized = output.toLowerCase();
-		if (
-			normalized === "json" ||
-			normalized === "table" ||
-			normalized === "text"
-		) {
-			return normalized;
+		if ((OUTPUT_FORMATS as readonly string[]).includes(normalized)) {
+			return normalized as OutputFormat;
 		}
 	}
 
 	return "text";
+}
+
+/**
+ * Validate an explicit `--output` value, exiting with an error when it is not
+ * one of the supported formats. An unset value is allowed and defaults to
+ * text. Mirrors the validation other commands apply to enum-like flags (e.g.
+ * `--registry`, `--type`).
+ */
+export function validateOutputFormat(output?: string): void {
+	if (
+		output &&
+		!(OUTPUT_FORMATS as readonly string[]).includes(output.toLowerCase())
+	) {
+		console.error(
+			`Invalid output format: "${output}". Allowed: ${OUTPUT_FORMATS.join(", ")}`,
+		);
+		process.exit(1);
+	}
 }
 
 /**
@@ -62,7 +86,7 @@ export class OutputRenderer {
 	readonly style: StyleInstance;
 
 	constructor(options: OutputOptions = {}) {
-		this.format = resolveOutputFormat(options.output);
+		this.format = resolveOutputFormat(options.json ? "json" : options.output);
 		this.style = createStyle({
 			mode: options.color === false ? "never" : "auto",
 		});
@@ -203,8 +227,12 @@ export class OutputRenderer {
 		console.log(result);
 	}
 
+	// Diagnostics go to stderr so that the data payload from `output()` is the
+	// only thing on stdout. This keeps `nia <cmd> --json | jq` clean even when a
+	// command prints a status line (e.g. "nia.json detected …") before its
+	// result. Mirrors the Unix convention shared by `warn`/`error`.
 	success(message: string): void {
-		console.log(this.style.green(message));
+		console.error(this.style.green(message));
 	}
 
 	warn(message: string): void {
@@ -216,7 +244,7 @@ export class OutputRenderer {
 	}
 
 	info(message: string): void {
-		console.log(this.style.dim(message));
+		console.error(this.style.dim(message));
 	}
 
 	private formatStatus(status: string): string {
@@ -268,7 +296,13 @@ function formatValue(value: unknown): string {
 
 /**
  * Factory function to create a shared output renderer.
+ *
+ * Validates the requested `--output` format up front, exiting with an error
+ * for unsupported values so a mistyped format is surfaced rather than silently
+ * falling back to text. When `--json` is set it overrides `--output`, so the
+ * ignored `--output` value is skipped to keep that precedence consistent.
  */
 export function createOutput(options: OutputOptions = {}): OutputRenderer {
+	validateOutputFormat(options.json ? undefined : options.output);
 	return new OutputRenderer(options);
 }

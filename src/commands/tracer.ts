@@ -39,7 +39,11 @@ const runCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling({ domain: "Tracer" }, async () => {
 				await createSdk({ apiKey: flags["api-key"] });
@@ -63,9 +67,10 @@ const runCommand = annotate(
 
 				fmt.output(result);
 
-				// Print hint for streaming in text/table mode
+				// The streaming hint is for the human text view; skip it for
+				// machine formats so the payload stays a single clean document.
 				const jobId = (result as Record<string, unknown>)?.job_id;
-				if (jobId) {
+				if (jobId && fmt.format === "text") {
 					console.log(`\nUse \`nia tracer stream ${jobId}\` to watch progress`);
 				}
 			});
@@ -90,7 +95,11 @@ const statusCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Tracer" }, async () => {
 			await createSdk({ apiKey: flags["api-key"] });
@@ -220,7 +229,11 @@ const listCommand = app
 		},
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		// Validate status if provided
 		const validStatuses = [

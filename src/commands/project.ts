@@ -136,7 +136,11 @@ const initCommand = annotate(
 			},
 		})
 		.run(async ({ flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling({ domain: "Project init" }, async () => {
 				const cwd = process.cwd();
@@ -509,7 +513,11 @@ const linkCommand = annotate(
 			},
 		})
 		.run(async ({ args, flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling({ domain: "Project link" }, async () => {
 				const manifestPath = ensureManifestPath();
@@ -603,7 +611,11 @@ const unlinkCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Project unlink" }, async () => {
 			const manifestPath = ensureManifestPath();
@@ -648,7 +660,11 @@ const statusCommand = app
 			"Show bound sources from nia.json with per-source health (indexed / pending / orphaned / not-found).",
 	})
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Project status" }, async () => {
 			const manifestPath = ensureManifestPath();
@@ -814,7 +830,11 @@ const syncCommand = annotate(
 			},
 		})
 		.run(async ({ flags }) => {
-			const fmt = createOutput({ color: flags.color });
+			const fmt = createOutput({
+				color: flags.color,
+				json: flags.json,
+				output: flags.output,
+			});
 
 			await withErrorHandling({ domain: "Project sync" }, async () => {
 				const manifestPath = ensureManifestPath();

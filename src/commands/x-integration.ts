@@ -79,7 +79,11 @@ const installCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "X" }, async () => {
 			const body: Record<string, unknown> = {
@@ -111,7 +115,11 @@ const listCommand = app
 	.sub("list")
 	.meta({ description: "List X/Twitter installations" })
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "X" }, async () => {
 			const result = await xFetch(flags, "/x/installations");
@@ -131,7 +139,11 @@ const statusCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "X" }, async () => {
 			const result = await xFetch(flags, `/x/installations/${args.id}/status`);
@@ -151,7 +163,11 @@ const indexCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "X" }, async () => {
 			const result = await xFetch(flags, `/x/installations/${args.id}/index`, {
@@ -173,7 +189,11 @@ const deleteCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "X" }, async () => {
 			const result = await xFetch(flags, `/x/installations/${args.id}`, {

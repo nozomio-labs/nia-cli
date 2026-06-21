@@ -76,7 +76,11 @@ const analyzeCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		const filePath = path.resolve(args.file);
 
 		await withErrorHandling({ domain: "Dependencies" }, async () => {
@@ -168,7 +172,11 @@ const subscribeCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		const filePath = path.resolve(args.file);
 
 		await withErrorHandling({ domain: "Dependencies" }, async () => {
@@ -251,7 +259,11 @@ const uploadCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 		const filePath = path.resolve(args.file);
 
 		await withErrorHandling({ domain: "Dependencies" }, async () => {

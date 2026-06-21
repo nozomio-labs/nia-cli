@@ -66,7 +66,11 @@ const installCommand = app
 	.sub("install")
 	.meta({ description: "Generate Google Drive OAuth install URL" })
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Google Drive" }, async () => {
 			const result = await gdriveFetch(flags, "/google-drive/install", {
@@ -80,7 +84,11 @@ const listCommand = app
 	.sub("list")
 	.meta({ description: "List Google Drive installations" })
 	.run(async ({ flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Google Drive" }, async () => {
 			const result = await gdriveFetch(flags, "/google-drive/installations");
@@ -114,7 +122,11 @@ const browseCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Google Drive" }, async () => {
 			const query: Record<string, string> = {};
@@ -163,7 +175,11 @@ const indexCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Google Drive" }, async () => {
 			const body: Record<string, unknown> = {};
@@ -198,7 +214,11 @@ const statusCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Google Drive" }, async () => {
 			const result = await gdriveFetch(
@@ -227,7 +247,11 @@ const syncCommand = app
 		},
 	})
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Google Drive" }, async () => {
 			const body: Record<string, unknown> = {};
@@ -256,7 +280,11 @@ const deleteCommand = app
 		},
 	] as const)
 	.run(async ({ args, flags }) => {
-		const fmt = createOutput({ color: flags.color });
+		const fmt = createOutput({
+			color: flags.color,
+			json: flags.json,
+			output: flags.output,
+		});
 
 		await withErrorHandling({ domain: "Google Drive" }, async () => {
 			const result = await gdriveFetch(
