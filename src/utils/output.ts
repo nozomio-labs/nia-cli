@@ -298,6 +298,6 @@ function formatValue(value: unknown): string {
  * falling back to text.
  */
 export function createOutput(options: OutputOptions = {}): OutputRenderer {
-	validateOutputFormat(options.output);
+	validateOutputFormat(options.json ? undefined : options.output);
 	return new OutputRenderer(options);
 }
