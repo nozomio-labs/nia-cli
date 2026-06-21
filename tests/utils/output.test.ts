@@ -81,6 +81,11 @@ describe("validateOutputFormat", () => {
 	test("createOutput rejects an unsupported format", () => {
 		expect(() => createOutput({ output: "xml" })).toThrow("process.exit(1)");
 	});
+
+	test("createOutput skips output validation when json overrides it", () => {
+		const fmt = createOutput({ json: true, output: "xml" });
+		expect(fmt.format).toBe("json");
+	});
 });
 
 describe("truncate", () => {

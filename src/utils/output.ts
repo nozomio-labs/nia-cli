@@ -295,7 +295,8 @@ function formatValue(value: unknown): string {
  *
  * Validates the requested `--output` format up front, exiting with an error
  * for unsupported values so a mistyped format is surfaced rather than silently
- * falling back to text.
+ * falling back to text. When `--json` is set it overrides `--output`, so the
+ * ignored `--output` value is skipped to keep that precedence consistent.
  */
 export function createOutput(options: OutputOptions = {}): OutputRenderer {
 	validateOutputFormat(options.json ? undefined : options.output);
